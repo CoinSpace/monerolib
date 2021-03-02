@@ -11,8 +11,8 @@ describe('crypto-util', () => {
     switch (cmd) {
       case 'check_scalar': {
         const [scalar, expected] = rest;
-        test(`checkScalar '${scalar}' is valid '${expected}'`, () => {
-          expect(cryptoUtil.checkScalar(Buffer.from(scalar, 'hex'))).toBe(expected === 'true');
+        test(`scalarCheck '${scalar}' is valid '${expected}'`, () => {
+          expect(cryptoUtil.scalarCheck(Buffer.from(scalar, 'hex'))).toBe(expected === 'true');
         });
         break;
       }
@@ -25,6 +25,14 @@ describe('crypto-util', () => {
         test(`hashToScalar '${data}' is scalar '${expected}'`, () => {
           const actual = cryptoUtil.hashToScalar(Buffer.from(data, 'hex', 32));
           expect(actual.equals(Buffer.from(expected, 'hex'))).toBe(true);
+        });
+        break;
+      }
+      case 'check_key': {
+        const [data, expected] = rest;
+        test(`keyCheck '${data}' is valid '${expected}`, () => {
+          const actual = cryptoUtil.keyCheck(Buffer.from(data, 'hex', 32));
+          expect(actual).toBe(expected === 'true');
         });
         break;
       }
