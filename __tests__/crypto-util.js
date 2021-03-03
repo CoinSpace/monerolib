@@ -30,7 +30,7 @@ describe('crypto-util', () => {
       }
       case 'check_key': {
         const [data, expected] = rest;
-        test(`keyCheck '${data}' is valid '${expected}`, () => {
+        test(`keyCheck '${data}' is valid '${expected}'`, () => {
           const actual = cryptoUtil.keyCheck(Buffer.from(data, 'hex', 32));
           expect(actual).toBe(expected === 'true');
         });
