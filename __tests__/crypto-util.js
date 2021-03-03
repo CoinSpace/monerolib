@@ -3,7 +3,11 @@ import fs from 'fs/promises';
 import cryptoUtil from '../lib/crypto-util.js';
 
 // https://github.com/monero-project/monero/blob/v0.17.1.9/tests/crypto/tests.txt
-const tests = (await fs.readFile('./__tests__/tests.txt', { encoding: 'utf8' })).split('\n');
+const tests = (await fs.readFile('./__tests__/fixtures/tests.txt', { encoding: 'utf8' })).split('\n');
+
+function hexToBuffer(hex, length = 32) {
+  return Buffer.from(hex, 'hex', length);
+}
 
 describe('crypto-util', () => {
   for (const item of tests) {
@@ -11,8 +15,10 @@ describe('crypto-util', () => {
     switch (cmd) {
       case 'check_scalar': {
         const [scalar, expected] = rest;
-        test(`scalarCheck '${scalar}' is valid '${expected}'`, () => {
-          expect(cryptoUtil.scalarCheck(Buffer.from(scalar, 'hex'))).toBe(expected === 'true');
+        describe('scalarCheck', () => {
+          test(`scalar '${scalar}' to be valid '${expected}'`, () => {
+            expect(cryptoUtil.scalarCheck(hexToBuffer(scalar))).toBe(expected === 'true');
+          });
         });
         break;
       }
@@ -22,17 +28,39 @@ describe('crypto-util', () => {
       }
       case 'hash_to_scalar': {
         const [data, expected] = rest;
-        test(`hashToScalar '${data}' is scalar '${expected}'`, () => {
-          const actual = cryptoUtil.hashToScalar(Buffer.from(data, 'hex', 32));
-          expect(actual.equals(Buffer.from(expected, 'hex'))).toBe(true);
+        describe('hashToScalar', () => {
+          test(`hash '${data}' to be converted to scalar '${expected}'`, () => {
+            const actual = cryptoUtil.hashToScalar(hexToBuffer(data));
+            expect(actual.equals(hexToBuffer(expected))).toBe(true);
+          });
         });
         break;
       }
       case 'check_key': {
         const [data, expected] = rest;
-        test(`keyCheck '${data}' is valid '${expected}'`, () => {
-          const actual = cryptoUtil.keyCheck(Buffer.from(data, 'hex', 32));
-          expect(actual).toBe(expected === 'true');
+        describe('keyCheck', () => {
+          test(`pub '${data}' to be valid '${expected}'`, () => {
+            const actual = cryptoUtil.keyCheck(hexToBuffer(data));
+            expect(actual).toBe(expected === 'true');
+          });
+        });
+        break;
+      }
+      case 'secret_key_to_public_key': {
+        const [sec, success, expected] = rest;
+        describe('secretKeyToPublicKey', () => {
+          if (success === 'true') {
+            test(`sec '${sec}' to be converted to pub '${expected}'`, () => {
+              const actual = cryptoUtil.secretKeyToPublicKey(hexToBuffer(sec));
+              expect(actual.equals(hexToBuffer(expected))).toBe(true);
+            });
+          } else {
+            test(`sec '${sec}' should throw 'Invalid secret key'`, () => {
+              expect(() => {
+                cryptoUtil.secretKeyToPublicKey(hexToBuffer(sec));
+              }).toThrow('Invalid secret key');
+            });
+          }
         });
         break;
       }
