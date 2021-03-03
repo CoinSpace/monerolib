@@ -64,6 +64,24 @@ describe('crypto-util', () => {
         });
         break;
       }
+      case 'generate_key_derivation': {
+        const [pub, sec, success, expected] = rest;
+        describe('generateKeyDerivation', () => {
+          if (success === 'true') {
+            test(`pub '${pub}' sec '${sec}' to be derived '${expected}'`, () => {
+              const actual = cryptoUtil.generateKeyDerivation(hexToBuffer(pub), hexToBuffer(sec));
+              expect(actual.equals(hexToBuffer(expected))).toBe(true);
+            });
+          } else {
+            test(`pub '${pub}' sec '${sec}' should throw 'Invalid secret key'`, () => {
+              expect(() => {
+                cryptoUtil.generateKeyDerivation(hexToBuffer(pub), hexToBuffer(sec));
+              }).toThrow('Invalid public key');
+            });
+          }
+        });
+        break;
+      }
       default: {
         break;
       }
