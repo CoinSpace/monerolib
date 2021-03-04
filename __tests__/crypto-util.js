@@ -101,6 +101,16 @@ describe('crypto-util', () => {
         });
         break;
       }
+      case 'derive_secret_key': {
+        const [derivation, index, base, expected] = rest;
+        describe('deriveSecretKey', () => {
+          test(`derivation '${derivation}' index '${index}' base: '${base}' to be derived '${expected}'`, () => {
+            const actual = cryptoUtil.deriveSecretKey(hexToBuffer(derivation), parseInt(index), hexToBuffer(base));
+            expect(actual.equals(hexToBuffer(expected))).toBe(true);
+          });
+        });
+        break;
+      }
       default: {
         break;
       }
