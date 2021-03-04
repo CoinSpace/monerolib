@@ -1,3 +1,4 @@
+/* eslint-disable max-len */
 import '@jest/globals';
 import fs from 'fs/promises';
 import cryptoUtil from '../lib/crypto-util.js';
@@ -76,6 +77,24 @@ describe('crypto-util', () => {
             test(`pub '${pub}' sec '${sec}' should throw 'Invalid secret key'`, () => {
               expect(() => {
                 cryptoUtil.generateKeyDerivation(hexToBuffer(pub), hexToBuffer(sec));
+              }).toThrow('Invalid public key');
+            });
+          }
+        });
+        break;
+      }
+      case 'derive_public_key': {
+        const [derivation, index, base, success, expected] = rest;
+        describe('derivePublicKey', () => {
+          if (success === 'true') {
+            test(`derivation '${derivation}' index '${index}' base: '${base}' to be derived '${expected}'`, () => {
+              const actual = cryptoUtil.derivePublicKey(hexToBuffer(derivation), parseInt(index), hexToBuffer(base));
+              expect(actual.equals(hexToBuffer(expected))).toBe(true);
+            });
+          } else {
+            test(`derivation '${derivation}' index '${index}' base: '${base}' should throw 'Invalid public key'`, () => {
+              expect(() => {
+                cryptoUtil.derivePublicKey(hexToBuffer(derivation), parseInt(index), hexToBuffer(base));
               }).toThrow('Invalid public key');
             });
           }
