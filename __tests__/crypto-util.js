@@ -17,13 +17,11 @@ function hexToBuffer(hex, length = 32) {
  */
 const state = new Int32Array(new Int8Array(200)
   .fill(42)
-  .buffer
-);
+  .buffer);
 
 function randomBytes(length) {
   permutation.p1600(state);
-  const buf = Buffer.from(state.buffer);
-  return buf.slice(0, length);
+  const buf = Buffer.from(state.buffer);  return buf.slice(0, length);
 }
 
 __mockRandomBytes__(randomBytes);
@@ -57,6 +55,17 @@ describe('crypto-util', () => {
           test(`hash '${data}' to be converted to scalar '${expected}'`, () => {
             const actual = cryptoUtil.hashToScalar(hexToBuffer(data));
             expect(actual.equals(hexToBuffer(expected))).toBe(true);
+          });
+        });
+        break;
+      }
+      case 'generate_keys': {
+        const [expectedPub, expectedSec] = rest;
+        describe('generateKeys', () => {
+          test(`should generate pub '${expectedPub}' sec '${expectedSec}'`, () => {
+            const { pub, sec } = cryptoUtil.generateKeys();
+            expect(pub.equals(hexToBuffer(expectedPub))).toBe(true);
+            expect(sec.equals(hexToBuffer(expectedSec))).toBe(true);
           });
         });
         break;
