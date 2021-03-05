@@ -2,6 +2,8 @@
 import '@jest/globals';
 import fs from 'fs/promises';
 import cryptoUtil from '../lib/crypto-util.js';
+import { __mockRandomBytes__ } from '../lib/crypto-util.js';
+import permutation from '../node_modules/keccak/lib/keccak-state-unroll.js';
 
 // https://github.com/monero-project/monero/blob/v0.17.1.9/tests/crypto/tests.txt
 const tests = (await fs.readFile('./__tests__/fixtures/tests.txt', { encoding: 'utf8' })).split('\n');
@@ -9,6 +11,22 @@ const tests = (await fs.readFile('./__tests__/fixtures/tests.txt', { encoding: '
 function hexToBuffer(hex, length = 32) {
   return Buffer.from(hex, 'hex', length);
 }
+
+/**
+ * https://github.com/monero-project/monero/blob/v0.17.1.9/tests/crypto/random.c#L36
+ */
+const state = new Int32Array(new Int8Array(200)
+  .fill(42)
+  .buffer
+);
+
+function randomBytes(length) {
+  permutation.p1600(state);
+  const buf = Buffer.from(state.buffer);
+  return buf.slice(0, length);
+}
+
+__mockRandomBytes__(randomBytes);
 
 describe('crypto-util', () => {
   for (const item of tests) {
@@ -24,7 +42,13 @@ describe('crypto-util', () => {
         break;
       }
       case 'random_scalar': {
-        // no tests for random_scalar
+        const [expected] = rest;
+        describe('randomScalar', () => {
+          test(`scalar must be '${expected}'`, () => {
+            const actual = cryptoUtil.randomScalar();
+            expect(actual.equals(hexToBuffer(expected))).toBe(true);
+          });
+        });
         break;
       }
       case 'hash_to_scalar': {
@@ -106,6 +130,16 @@ describe('crypto-util', () => {
         describe('deriveSecretKey', () => {
           test(`derivation '${derivation}' index '${index}' base: '${base}' to be derived '${expected}'`, () => {
             const actual = cryptoUtil.deriveSecretKey(hexToBuffer(derivation), parseInt(index), hexToBuffer(base));
+            expect(actual.equals(hexToBuffer(expected))).toBe(true);
+          });
+        });
+        break;
+      }
+      case 'generate_signature': {
+        const [prefix, pub, sec, expected] = rest;
+        describe('generateSignature', () => {
+          test(`prefix '${prefix}' pub '${pub}' sec: '${sec}' to be signature '${expected}'`, () => {
+            const actual = cryptoUtil.generateSignature(hexToBuffer(prefix), hexToBuffer(pub), hexToBuffer(sec));
             expect(actual.equals(hexToBuffer(expected))).toBe(true);
           });
         });

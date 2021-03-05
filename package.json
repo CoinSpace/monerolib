@@ -8,7 +8,7 @@
   "type": "module",
   "scripts": {
     "build": "babel ./lib --out-file-extension=.cjs --out-dir=./lib",
-    "test": "NODE_OPTIONS=--experimental-vm-modules jest",
+    "test": "NODE_OPTIONS=--experimental-vm-modules jest --runInBand",
     "lint": "eslint lib/*.js __tests__"
   },
   "dependencies": {
