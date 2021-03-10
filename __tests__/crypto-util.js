@@ -154,6 +154,16 @@ describe('crypto-util', () => {
         });
         break;
       }
+      case 'check_signature': {
+        const [prefix, pub, sig, expected] = rest;
+        describe('checkSignature', () => {
+          test(`prefix '${prefix}' pub '${pub}' sec: '${sig}' to be valid signature '${expected}'`, () => {
+            const actual = cryptoUtil.checkSignature(hexToBuffer(prefix), hexToBuffer(pub), hexToBuffer(sig));
+            expect(actual).toBe(expected === 'true');
+          });
+        });
+        break;
+      }
       default: {
         break;
       }
