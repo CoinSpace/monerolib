@@ -189,6 +189,16 @@ describe('crypto-util', () => {
         });
         break;
       }
+      case 'generate_key_image': {
+        const [pub, sec, expected] = rest;
+        describe('generateKeyImage', () => {
+          test(`pub '${pub}' sec: '${sec}' to be key image '${expected}'`, () => {
+            const actual = cryptoUtil.generateKeyImage(hexToBuffer(pub), hexToBuffer(sec));
+            expect(actual.equals(hexToBuffer(expected))).toBe(true);
+          });
+        });
+        break;
+      }
       default: {
         break;
       }
