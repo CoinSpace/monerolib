@@ -1,9 +1,12 @@
 /* eslint-disable max-len */
 import '@jest/globals';
 import fs from 'fs/promises';
+import elliptic from 'elliptic';
 import cryptoUtil from '../lib/crypto-util.js';
 import { __mockRandomBytes__ } from '../lib/crypto-util.js';
 import permutation from '../node_modules/keccak/lib/keccak-state-unroll.js';
+
+const ec = new elliptic.eddsa('ed25519');
 
 // https://github.com/monero-project/monero/blob/v0.17.1.9/tests/crypto/tests.txt
 const tests = (await fs.readFile('./__tests__/fixtures/tests.txt', { encoding: 'utf8' })).split('\n');
@@ -160,6 +163,17 @@ describe('crypto-util', () => {
           test(`prefix '${prefix}' pub '${pub}' sec: '${sig}' to be valid signature '${expected}'`, () => {
             const actual = cryptoUtil.checkSignature(hexToBuffer(prefix), hexToBuffer(pub), hexToBuffer(sig));
             expect(actual).toBe(expected === 'true');
+          });
+        });
+        break;
+      }
+      case 'hash_to_point': {
+        const [data, expected] = rest;
+        describe('hashToPoint', () => {
+          test(`hash '${data}' to be converted to point '${expected}'`, () => {
+            const point = cryptoUtil.hashToPoint(hexToBuffer(data));
+            const actual = Buffer.from(ec.encodePoint(point));
+            expect(actual.equals(hexToBuffer(expected))).toBe(true);
           });
         });
         break;
