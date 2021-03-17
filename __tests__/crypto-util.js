@@ -178,6 +178,17 @@ describe('crypto-util', () => {
         });
         break;
       }
+      case 'hash_to_ec': {
+        const [data, expected] = rest;
+        describe('hashToEc', () => {
+          test(`hash '${data}' to be converted to ec point '${expected}'`, () => {
+            const point = cryptoUtil.hashToEc(hexToBuffer(data));
+            const actual = Buffer.from(ec.encodePoint(point));
+            expect(actual.equals(hexToBuffer(expected))).toBe(true);
+          });
+        });
+        break;
+      }
       default: {
         break;
       }
