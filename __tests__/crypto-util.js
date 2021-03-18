@@ -199,6 +199,24 @@ describe('crypto-util', () => {
         });
         break;
       }
+      case 'generate_ring_signature': {
+        const [prefix, image, count, ...r] = rest;
+        const pubs = r.slice(0, count);
+        const [sec, index, expected] = r.slice(count);
+        describe('generateRingSignature', () => {
+          test(`prefix '${prefix}' image: '${image}' pubs count: ${count} sec: ${sec} to be valid signature'`, () => {
+            const actual = cryptoUtil.generateRingSignature(
+              hexToBuffer(prefix),
+              hexToBuffer(image),
+              pubs.map(hexToBuffer),
+              hexToBuffer(sec),
+              parseInt(index)
+            );
+            expect(actual.equals(hexToBuffer(expected))).toBe(true);
+          });
+        });
+        break;
+      }
       default: {
         break;
       }
