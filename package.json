@@ -8,8 +8,8 @@
   "type": "module",
   "scripts": {
     "build": "babel ./lib --out-file-extension=.cjs --out-dir=./lib",
-    "test": "NODE_OPTIONS=--experimental-vm-modules jest --runInBand",
-    "lint": "eslint lib/*.js __tests__"
+    "test": "mocha",
+    "lint": "eslint lib/*.js test/*.js"
   },
   "dependencies": {
     "bn.js": "^4.12.0",
@@ -26,7 +26,7 @@
     "@babel/preset-env": "^7.13.8",
     "eslint": "^7.21.0",
     "eslint-config-coinspace": "^1.1.1",
-    "jest": "^26.6.3"
+    "mocha": "^8.3.2"
   },
   "babel": {
     "presets": [
@@ -43,9 +43,6 @@
       "@babel/plugin-syntax-top-level-await"
     ]
   },
-  "jest": {
-    "testEnvironment": "node"
-  },
   "eslintConfig": {
     "extends": [
       "coinspace"
@@ -61,10 +58,10 @@
       {
         "files": [
           "*.test.js",
-          "__tests__/*"
+          "test/*"
         ],
         "env": {
-          "jest": true
+          "mocha": true
         }
       }
     ]
