@@ -160,7 +160,7 @@ describe('crypto-util', () => {
       case 'check_signature': {
         const [prefix, pub, sig, expected] = rest;
         describe('checkSignature', () => {
-          test(`prefix '${prefix}' pub '${pub}' sec: '${sig}' to be valid signature '${expected}'`, () => {
+          test(`prefix '${prefix}' pub '${pub}' sig: '${sig}' to be valid signature '${expected}'`, () => {
             const actual = cryptoUtil.checkSignature(hexToBuffer(prefix), hexToBuffer(pub), hexToBuffer(sig));
             expect(actual).toBe(expected === 'true');
           });
@@ -213,6 +213,23 @@ describe('crypto-util', () => {
               parseInt(index)
             );
             expect(actual.equals(hexToBuffer(expected))).toBe(true);
+          });
+        });
+        break;
+      }
+      case 'check_ring_signature': {
+        const [prefix, image, count, ...r] = rest;
+        const pubs = r.slice(0, count);
+        const [sig, expected] = r.slice(count);
+        describe('checkRingSignature', () => {
+          test(`prefix '${prefix}' image '${image}' pubs count: ${count} to be valid signature '${expected}'`, () => {
+            const actual = cryptoUtil.checkRingSignature(
+              hexToBuffer(prefix),
+              hexToBuffer(image),
+              pubs.map(hexToBuffer),
+              hexToBuffer(sig)
+            );
+            expect(actual).toBe(expected === 'true');
           });
         });
         break;
