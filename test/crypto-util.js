@@ -35,9 +35,9 @@ describe('crypto-util', () => {
     switch (cmd) {
       case 'check_scalar': {
         const [scalar, expected] = rest;
-        describe('scalarCheck', () => {
+        describe('checkScalar', () => {
           it(`scalar '${scalar}' to be valid '${expected}'`, () => {
-            const actual = cryptoUtil.scalarCheck(hexToBuffer(scalar));
+            const actual = cryptoUtil.checkScalar(hexToBuffer(scalar));
             assert.deepStrictEqual(actual, expected === 'true');
           });
         });
@@ -76,9 +76,9 @@ describe('crypto-util', () => {
       }
       case 'check_key': {
         const [data, expected] = rest;
-        describe('keyCheck', () => {
+        describe('checkKey', () => {
           it(`pub '${data}' to be valid '${expected}'`, () => {
-            const actual = cryptoUtil.keyCheck(hexToBuffer(data));
+            const actual = cryptoUtil.checkKey(hexToBuffer(data));
             assert.deepStrictEqual(actual, expected === 'true');
           });
         });
