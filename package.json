@@ -22,6 +22,7 @@
     "@babel/cli": "^7.13.0",
     "@babel/core": "^7.13.8",
     "@babel/eslint-parser": "^7.13.8",
+    "@babel/plugin-proposal-class-properties": "^7.13.0",
     "@babel/plugin-syntax-top-level-await": "^7.12.13",
     "@babel/preset-env": "^7.13.8",
     "eslint": "^7.21.0",
@@ -40,7 +41,8 @@
       ]
     ],
     "plugins": [
-      "@babel/plugin-syntax-top-level-await"
+      "@babel/plugin-syntax-top-level-await",
+      "@babel/plugin-proposal-class-properties"
     ]
   },
   "eslintConfig": {
