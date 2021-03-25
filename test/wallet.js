@@ -61,4 +61,38 @@ describe('Wallet', () => {
       }, { message: 'Wallet in view only mode' });
     });
   });
+
+  describe('getSubaddress', () => {
+    let wallet;
+    before(() => {
+      wallet = new Wallet({
+        seed: Buffer.from('8d8c8eeca38ac3b46aa293fd519b3860e96b5f873c12a95e3e1cdeda0bac4903', 'hex'),
+      });
+    });
+
+    it('should generate the right address for default account 0 with index 0', () => {
+      const actual = wallet.getSubaddress(0, 0).toString();
+      assert.strictEqual(actual, '4B33mFPMq6mKi7Eiyd5XuyKRVMGVZz1Rqb9ZTyGApXW5d1aT7UBDZ89ewmnWFkzJ5wPd2SFbn313vCT8a4E2Qf4KQH4pNey');
+    });
+
+    it('should generate the right subaddress for account 0 with index 1', () => {
+      const actual = wallet.getSubaddress(0, 1).toString();
+      assert.strictEqual(actual, '8C5zHM5ud8nGC4hC2ULiBLSWx9infi8JUUmWEat4fcTf8J4H38iWYVdFmPCA9UmfLTZxD43RsyKnGEdZkoGij6csDeUnbEB');
+    });
+
+    it('should generate the right subaddress for account 0 with index 256', () => {
+      const actual = wallet.getSubaddress(0, 256).toString();
+      assert.strictEqual(actual, '883z7xonbVBGXpsatJZ53vcDiXQkrkTHUHPxrdrHXiPnZY8DMaYJ7a88C5ovncy5zHWkLc2cQ2hUoaKYCjFtjwFV4vtcpiF');
+    });
+
+    it('should generate the right subaddress for account 256 with index 1', () => {
+      const actual = wallet.getSubaddress(256, 1).toString();
+      assert.strictEqual(actual, '87X4ksVMRv2UGhHcgVjY6KJDjqP9S4zrCNkmomL1ziQVeZXF3RXbAx7i2rRt3UU5eXDzG9TWZ6Rk1Fyg6pZrAKQCNfLrSne');
+    });
+
+    it('should generate the right subaddress for account 256 with index 256', () => {
+      const actual = wallet.getSubaddress(256, 256).toString();
+      assert.strictEqual(actual, '86gYdT7yqDJUXegizt1vbF3YKz5qSYVaMB61DFBDzrpVEpYgDbmuXJbXE77LQfAygrVGwYpw8hxxx9DRTiyHAemA8B5yBAq');
+    });
+  });
 });
