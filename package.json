@@ -4,7 +4,11 @@
   "description": "Monero JavaScript library",
   "author": "Coin Crypto Wallet <support@coin.space> (https://coin.space/)",
   "license": "MIT",
-  "main": "index.js",
+  "main": "./lib/index.cjs",
+  "exports": {
+    "import": "./lib/index.js",
+    "require": "./lib/index.cjs"
+  },
   "type": "module",
   "scripts": {
     "build": "babel ./lib --out-file-extension=.cjs --out-dir=./lib",
@@ -25,6 +29,7 @@
     "@babel/plugin-proposal-class-properties": "^7.13.0",
     "@babel/plugin-syntax-top-level-await": "^7.12.13",
     "@babel/preset-env": "^7.13.8",
+    "babel-plugin-replace-import-extension": "^1.1.0",
     "eslint": "^7.21.0",
     "eslint-config-coinspace": "^1.1.1",
     "mocha": "^8.3.2"
@@ -42,7 +47,15 @@
     ],
     "plugins": [
       "@babel/plugin-syntax-top-level-await",
-      "@babel/plugin-proposal-class-properties"
+      "@babel/plugin-proposal-class-properties",
+      [
+        "replace-import-extension",
+        {
+          "extMapping": {
+            ".js": ".cjs"
+          }
+        }
+      ]
     ]
   },
   "eslintConfig": {
