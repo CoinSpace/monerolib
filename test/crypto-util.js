@@ -3,6 +3,7 @@ import assert from 'assert';
 import fs from 'fs/promises';
 import elliptic from 'elliptic';
 import cryptoUtil from '../lib/crypto-util.js';
+import { hexToBuffer } from '../lib/helpers.js';
 import { __mockRandomBytes__ } from '../lib/crypto-util.js';
 import permutation from '../node_modules/keccak/lib/keccak-state-unroll.js';
 
@@ -10,10 +11,6 @@ const ec = new elliptic.eddsa('ed25519');
 
 // https://github.com/monero-project/monero/blob/v0.17.1.9/tests/crypto/tests.txt
 const tests = (await fs.readFile('./test/fixtures/tests.txt', { encoding: 'utf8' })).split('\n');
-
-function hexToBuffer(hex, length = 32) {
-  return Buffer.from(hex, 'hex', length);
-}
 
 /**
  * https://github.com/monero-project/monero/blob/v0.17.1.9/tests/crypto/random.c#L36
@@ -38,7 +35,7 @@ describe('crypto-util', () => {
         describe('checkScalar', () => {
           it(`scalar '${scalar}' to be valid '${expected}'`, () => {
             const actual = cryptoUtil.checkScalar(hexToBuffer(scalar));
-            assert.deepStrictEqual(actual, expected === 'true');
+            assert.strictEqual(actual, expected === 'true');
           });
         });
         break;
@@ -48,7 +45,7 @@ describe('crypto-util', () => {
         describe('randomScalar', () => {
           it(`scalar must be '${expected}'`, () => {
             const actual = cryptoUtil.randomScalar();
-            assert.deepStrictEqual(actual, hexToBuffer(expected));
+            assert.strictEqual(actual.toString('hex'), expected);
           });
         });
         break;
@@ -58,7 +55,7 @@ describe('crypto-util', () => {
         describe('hashToScalar', () => {
           it(`hash '${data}' to be converted to scalar '${expected}'`, () => {
             const actual = cryptoUtil.hashToScalar(hexToBuffer(data));
-            assert.deepStrictEqual(actual, hexToBuffer(expected));
+            assert.strictEqual(actual.toString('hex'), expected);
           });
         });
         break;
@@ -68,8 +65,8 @@ describe('crypto-util', () => {
         describe('generateKeys', () => {
           it(`should generate pub '${expectedPub}' sec '${expectedSec}'`, () => {
             const { pub, sec } = cryptoUtil.generateKeys();
-            assert.deepStrictEqual(pub, hexToBuffer(expectedPub));
-            assert.deepStrictEqual(sec, hexToBuffer(expectedSec));
+            assert.strictEqual(pub.toString('hex'), expectedPub);
+            assert.strictEqual(sec.toString('hex'), expectedSec);
           });
         });
         break;
@@ -79,7 +76,7 @@ describe('crypto-util', () => {
         describe('checkKey', () => {
           it(`pub '${data}' to be valid '${expected}'`, () => {
             const actual = cryptoUtil.checkKey(hexToBuffer(data));
-            assert.deepStrictEqual(actual, expected === 'true');
+            assert.strictEqual(actual, expected === 'true');
           });
         });
         break;
@@ -90,7 +87,7 @@ describe('crypto-util', () => {
           if (success === 'true') {
             it(`sec '${sec}' to be converted to pub '${expected}'`, () => {
               const actual = cryptoUtil.secretKeyToPublicKey(hexToBuffer(sec));
-              assert.deepStrictEqual(actual, hexToBuffer(expected));
+              assert.strictEqual(actual.toString('hex'), expected);
             });
           } else {
             it(`sec '${sec}' should throw 'Invalid secret key'`, () => {
@@ -108,7 +105,7 @@ describe('crypto-util', () => {
           if (success === 'true') {
             it(`pub '${pub}' sec '${sec}' to be derived '${expected}'`, () => {
               const actual = cryptoUtil.generateKeyDerivation(hexToBuffer(pub), hexToBuffer(sec));
-              assert.deepStrictEqual(actual, hexToBuffer(expected));
+              assert.strictEqual(actual.toString('hex'), expected);
             });
           } else {
             it(`pub '${pub}' sec '${sec}' should throw 'Invalid secret key'`, () => {
@@ -126,7 +123,7 @@ describe('crypto-util', () => {
           if (success === 'true') {
             it(`derivation '${derivation}' index '${index}' base: '${base}' to be derived '${expected}'`, () => {
               const actual = cryptoUtil.derivePublicKey(hexToBuffer(derivation), parseInt(index), hexToBuffer(base));
-              assert.deepStrictEqual(actual, hexToBuffer(expected));
+              assert.strictEqual(actual.toString('hex'), expected);
             });
           } else {
             it(`derivation '${derivation}' index '${index}' base: '${base}' should throw 'Invalid public key'`, () => {
@@ -143,7 +140,7 @@ describe('crypto-util', () => {
         describe('deriveSecretKey', () => {
           it(`derivation '${derivation}' index '${index}' base: '${base}' to be derived '${expected}'`, () => {
             const actual = cryptoUtil.deriveSecretKey(hexToBuffer(derivation), parseInt(index), hexToBuffer(base));
-            assert.deepStrictEqual(actual, hexToBuffer(expected));
+            assert.strictEqual(actual.toString('hex'), expected);
           });
         });
         break;
@@ -153,7 +150,7 @@ describe('crypto-util', () => {
         describe('generateSignature', () => {
           it(`prefix '${prefix}' pub '${pub}' sec: '${sec}' to be signature '${expected}'`, () => {
             const actual = cryptoUtil.generateSignature(hexToBuffer(prefix), hexToBuffer(pub), hexToBuffer(sec));
-            assert.deepStrictEqual(actual, hexToBuffer(expected));
+            assert.strictEqual(actual.toString('hex'), expected);
           });
         });
         break;
@@ -163,7 +160,7 @@ describe('crypto-util', () => {
         describe('checkSignature', () => {
           it(`prefix '${prefix}' pub '${pub}' sig: '${sig}' to be valid signature '${expected}'`, () => {
             const actual = cryptoUtil.checkSignature(hexToBuffer(prefix), hexToBuffer(pub), hexToBuffer(sig));
-            assert.deepStrictEqual(actual, expected === 'true');
+            assert.strictEqual(actual, expected === 'true');
           });
         });
         break;
@@ -174,7 +171,7 @@ describe('crypto-util', () => {
           it(`hash '${data}' to be converted to point '${expected}'`, () => {
             const point = cryptoUtil.hashToPoint(hexToBuffer(data));
             const actual = Buffer.from(ec.encodePoint(point));
-            assert.deepStrictEqual(actual, hexToBuffer(expected));
+            assert.strictEqual(actual.toString('hex'), expected);
           });
         });
         break;
@@ -185,7 +182,7 @@ describe('crypto-util', () => {
           it(`hash '${data}' to be converted to ec point '${expected}'`, () => {
             const point = cryptoUtil.hashToEc(hexToBuffer(data));
             const actual = Buffer.from(ec.encodePoint(point));
-            assert.deepStrictEqual(actual, hexToBuffer(expected));
+            assert.strictEqual(actual.toString('hex'), expected);
           });
         });
         break;
@@ -195,7 +192,7 @@ describe('crypto-util', () => {
         describe('generateKeyImage', () => {
           it(`pub '${pub}' sec: '${sec}' to be key image '${expected}'`, () => {
             const actual = cryptoUtil.generateKeyImage(hexToBuffer(pub), hexToBuffer(sec));
-            assert.deepStrictEqual(actual, hexToBuffer(expected));
+            assert.strictEqual(actual.toString('hex'), expected);
           });
         });
         break;
@@ -213,7 +210,7 @@ describe('crypto-util', () => {
               hexToBuffer(sec),
               parseInt(index)
             );
-            assert.deepStrictEqual(actual, hexToBuffer(expected));
+            assert.strictEqual(actual.toString('hex'), expected);
           }).timeout(5000);
         });
         break;
@@ -230,7 +227,7 @@ describe('crypto-util', () => {
               pubs.map(hexToBuffer),
               hexToBuffer(sig)
             );
-            assert.deepStrictEqual(actual, expected === 'true');
+            assert.strictEqual(actual, expected === 'true');
           }).timeout(5000);
         });
         break;
