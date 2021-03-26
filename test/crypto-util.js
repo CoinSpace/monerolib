@@ -3,7 +3,6 @@ import assert from 'assert';
 import fs from 'fs/promises';
 import elliptic from 'elliptic';
 import cryptoUtil from '../lib/crypto-util.js';
-import { hexToBuffer } from '../lib/helpers.js';
 import { __mockRandomBytes__ } from '../lib/crypto-util.js';
 import permutation from '../node_modules/keccak/lib/keccak-state-unroll.js';
 
@@ -34,7 +33,7 @@ describe('crypto-util', () => {
         const [scalar, expected] = rest;
         describe('checkScalar', () => {
           it(`scalar '${scalar}' to be valid '${expected}'`, () => {
-            const actual = cryptoUtil.checkScalar(hexToBuffer(scalar));
+            const actual = cryptoUtil.checkScalar(scalar);
             assert.strictEqual(actual, expected === 'true');
           });
         });
@@ -54,7 +53,7 @@ describe('crypto-util', () => {
         const [data, expected] = rest;
         describe('hashToScalar', () => {
           it(`hash '${data}' to be converted to scalar '${expected}'`, () => {
-            const actual = cryptoUtil.hashToScalar(hexToBuffer(data));
+            const actual = cryptoUtil.hashToScalar(data);
             assert.strictEqual(actual.toString('hex'), expected);
           });
         });
@@ -75,7 +74,7 @@ describe('crypto-util', () => {
         const [data, expected] = rest;
         describe('checkKey', () => {
           it(`pub '${data}' to be valid '${expected}'`, () => {
-            const actual = cryptoUtil.checkKey(hexToBuffer(data));
+            const actual = cryptoUtil.checkKey(data);
             assert.strictEqual(actual, expected === 'true');
           });
         });
@@ -86,13 +85,13 @@ describe('crypto-util', () => {
         describe('secretKeyToPublicKey', () => {
           if (success === 'true') {
             it(`sec '${sec}' to be converted to pub '${expected}'`, () => {
-              const actual = cryptoUtil.secretKeyToPublicKey(hexToBuffer(sec));
+              const actual = cryptoUtil.secretKeyToPublicKey(sec);
               assert.strictEqual(actual.toString('hex'), expected);
             });
           } else {
             it(`sec '${sec}' should throw 'Invalid secret key'`, () => {
               assert.throws(() => {
-                cryptoUtil.secretKeyToPublicKey(hexToBuffer(sec));
+                cryptoUtil.secretKeyToPublicKey(sec);
               }, { message: 'Invalid secret key' });
             });
           }
@@ -104,13 +103,13 @@ describe('crypto-util', () => {
         describe('generateKeyDerivation', () => {
           if (success === 'true') {
             it(`pub '${pub}' sec '${sec}' to be derived '${expected}'`, () => {
-              const actual = cryptoUtil.generateKeyDerivation(hexToBuffer(pub), hexToBuffer(sec));
+              const actual = cryptoUtil.generateKeyDerivation(pub, sec);
               assert.strictEqual(actual.toString('hex'), expected);
             });
           } else {
             it(`pub '${pub}' sec '${sec}' should throw 'Invalid secret key'`, () => {
               assert.throws(() => {
-                cryptoUtil.generateKeyDerivation(hexToBuffer(pub), hexToBuffer(sec));
+                cryptoUtil.generateKeyDerivation(pub, sec);
               }, { message: 'Invalid public key' });
             });
           }
@@ -122,13 +121,13 @@ describe('crypto-util', () => {
         describe('derivePublicKey', () => {
           if (success === 'true') {
             it(`derivation '${derivation}' index '${index}' base: '${base}' to be derived '${expected}'`, () => {
-              const actual = cryptoUtil.derivePublicKey(hexToBuffer(derivation), parseInt(index), hexToBuffer(base));
+              const actual = cryptoUtil.derivePublicKey(derivation, parseInt(index), base);
               assert.strictEqual(actual.toString('hex'), expected);
             });
           } else {
             it(`derivation '${derivation}' index '${index}' base: '${base}' should throw 'Invalid public key'`, () => {
               assert.throws(() => {
-                cryptoUtil.derivePublicKey(hexToBuffer(derivation), parseInt(index), hexToBuffer(base));
+                cryptoUtil.derivePublicKey(derivation, parseInt(index), base);
               }, { message: 'Invalid public key' });
             });
           }
@@ -139,7 +138,7 @@ describe('crypto-util', () => {
         const [derivation, index, base, expected] = rest;
         describe('deriveSecretKey', () => {
           it(`derivation '${derivation}' index '${index}' base: '${base}' to be derived '${expected}'`, () => {
-            const actual = cryptoUtil.deriveSecretKey(hexToBuffer(derivation), parseInt(index), hexToBuffer(base));
+            const actual = cryptoUtil.deriveSecretKey(derivation, parseInt(index), base);
             assert.strictEqual(actual.toString('hex'), expected);
           });
         });
@@ -149,7 +148,7 @@ describe('crypto-util', () => {
         const [prefix, pub, sec, expected] = rest;
         describe('generateSignature', () => {
           it(`prefix '${prefix}' pub '${pub}' sec: '${sec}' to be signature '${expected}'`, () => {
-            const actual = cryptoUtil.generateSignature(hexToBuffer(prefix), hexToBuffer(pub), hexToBuffer(sec));
+            const actual = cryptoUtil.generateSignature(prefix, pub, sec);
             assert.strictEqual(actual.toString('hex'), expected);
           });
         });
@@ -159,7 +158,7 @@ describe('crypto-util', () => {
         const [prefix, pub, sig, expected] = rest;
         describe('checkSignature', () => {
           it(`prefix '${prefix}' pub '${pub}' sig: '${sig}' to be valid signature '${expected}'`, () => {
-            const actual = cryptoUtil.checkSignature(hexToBuffer(prefix), hexToBuffer(pub), hexToBuffer(sig));
+            const actual = cryptoUtil.checkSignature(prefix, pub, sig);
             assert.strictEqual(actual, expected === 'true');
           });
         });
@@ -169,7 +168,7 @@ describe('crypto-util', () => {
         const [data, expected] = rest;
         describe('hashToPoint', () => {
           it(`hash '${data}' to be converted to point '${expected}'`, () => {
-            const point = cryptoUtil.hashToPoint(hexToBuffer(data));
+            const point = cryptoUtil.hashToPoint(data);
             const actual = Buffer.from(ec.encodePoint(point));
             assert.strictEqual(actual.toString('hex'), expected);
           });
@@ -180,7 +179,7 @@ describe('crypto-util', () => {
         const [data, expected] = rest;
         describe('hashToEc', () => {
           it(`hash '${data}' to be converted to ec point '${expected}'`, () => {
-            const point = cryptoUtil.hashToEc(hexToBuffer(data));
+            const point = cryptoUtil.hashToEc(data);
             const actual = Buffer.from(ec.encodePoint(point));
             assert.strictEqual(actual.toString('hex'), expected);
           });
@@ -191,7 +190,7 @@ describe('crypto-util', () => {
         const [pub, sec, expected] = rest;
         describe('generateKeyImage', () => {
           it(`pub '${pub}' sec: '${sec}' to be key image '${expected}'`, () => {
-            const actual = cryptoUtil.generateKeyImage(hexToBuffer(pub), hexToBuffer(sec));
+            const actual = cryptoUtil.generateKeyImage(pub, sec);
             assert.strictEqual(actual.toString('hex'), expected);
           });
         });
@@ -204,10 +203,10 @@ describe('crypto-util', () => {
         describe('generateRingSignature', () => {
           it(`prefix '${prefix}' image: '${image}' pubs count: ${count} sec: ${sec} to be valid signature'`, () => {
             const actual = cryptoUtil.generateRingSignature(
-              hexToBuffer(prefix),
-              hexToBuffer(image),
-              pubs.map(hexToBuffer),
-              hexToBuffer(sec),
+              prefix,
+              image,
+              pubs,
+              sec,
               parseInt(index)
             );
             assert.strictEqual(actual.toString('hex'), expected);
@@ -222,10 +221,10 @@ describe('crypto-util', () => {
         describe('checkRingSignature', () => {
           it(`prefix '${prefix}' image '${image}' pubs count: ${count} to be valid signature '${expected}'`, () => {
             const actual = cryptoUtil.checkRingSignature(
-              hexToBuffer(prefix),
-              hexToBuffer(image),
-              pubs.map(hexToBuffer),
-              hexToBuffer(sig)
+              prefix,
+              image,
+              pubs,
+              sig
             );
             assert.strictEqual(actual, expected === 'true');
           }).timeout(5000);
