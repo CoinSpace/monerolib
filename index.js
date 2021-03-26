@@ -3,12 +3,14 @@ export { default as ringct } from './lib/ringct.js';
 export { default as tx } from './lib/tx.js';
 export { default as helpers } from './lib/helpers.js';
 export { default as Wallet } from './lib/wallet.js';
+export { default as Address } from './lib/address.js';
 
 import cryptoUtil from './lib/crypto-util.js';
 import ringct from './lib/ringct.js';
 import tx from './lib/tx.js';
 import helpers from './lib/helpers.js';
 import Wallet from './lib/wallet.js';
+import Address from './lib/address.js';
 
 export default {
   cryptoUtil,
@@ -16,4 +18,5 @@ export default {
   tx,
   helpers,
   Wallet,
+  Address,
 };
