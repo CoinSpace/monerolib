@@ -4,14 +4,14 @@
   "description": "Monero JavaScript library",
   "author": "Coin Crypto Wallet <support@coin.space> (https://coin.space/)",
   "license": "MIT",
-  "main": "./lib/index.cjs",
+  "main": "./index.cjs",
   "exports": {
-    "import": "./lib/index.js",
-    "require": "./lib/index.cjs"
+    "import": "./index.js",
+    "require": "./index.cjs"
   },
   "type": "module",
   "scripts": {
-    "build": "babel ./lib --out-file-extension=.cjs --out-dir=./lib",
+    "build": "babel index.js --out-file-extension=.cjs --out-dir=./ && babel ./lib --out-file-extension=.cjs --out-dir=./lib",
     "test": "mocha",
     "lint": "eslint lib/*.js test/*.js"
   },
