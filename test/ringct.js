@@ -5,13 +5,37 @@ import { hexToBuffer } from '../lib/helpers.js';
 
 describe('ringct', () => {
 
+  describe('ecdhEncode', () => {
+
+    it('should work for v1', () => {
+      assert.deepStrictEqual(ringct.ecdhEncode({
+        amount: 'c32eac9cec686d5c9b1397d31ce8f2e5d8ccdba118724ef332da1e9854af9a0a',
+        mask: '0f78b8c44cc7eef45371b2faea30871552f0d74be195720f0ff9395d302a7a05',
+      }, 'e720a09f2e3a0bbf4e4ba7ad93653bb296885510121f806acb2a5f9168fafa01', ringct.RCTTypes.Bulletproof),
+      {
+        amount: hexToBuffer('ce0ae31063ed7d5f87db7a312b99cadd77786cd366970e3d82e4735a2d65ce05'),
+        mask: hexToBuffer('b4bb3837a56b6e63eda0706c08754461fb813eac1eba083497dd149f2ddbae0d'),
+      });
+    });
+
+    it('should work for v2', () => {
+      assert.deepStrictEqual(ringct.ecdhEncode({
+        amount: 'bb477feedbe8a2f8000000000000000000000000000000000000000000000000',
+      }, 'ce0ae31063ed7d5f87db7a312b99cadd77786cd366970e3d82e4735a2d65ce05', ringct.RCTTypes.Bulletproof2),
+      {
+        amount: hexToBuffer('e745cf6a1fe5f04a000000000000000000000000000000000000000000000000'),
+        mask: Buffer.alloc(32),
+      });
+    });
+  });
+
   describe('ecdhDecode', () => {
 
     it('should work for v1', () => {
       assert.deepStrictEqual(ringct.ecdhDecode({
         amount: 'ce0ae31063ed7d5f87db7a312b99cadd77786cd366970e3d82e4735a2d65ce05',
         mask: 'b4bb3837a56b6e63eda0706c08754461fb813eac1eba083497dd149f2ddbae0d',
-      },  'e720a09f2e3a0bbf4e4ba7ad93653bb296885510121f806acb2a5f9168fafa01', ringct.RCTTypes.Bulletproof),
+      }, 'e720a09f2e3a0bbf4e4ba7ad93653bb296885510121f806acb2a5f9168fafa01', ringct.RCTTypes.Bulletproof),
       {
         amount: hexToBuffer('c32eac9cec686d5c9b1397d31ce8f2e5d8ccdba118724ef332da1e9854af9a0a'),
         mask: hexToBuffer('0f78b8c44cc7eef45371b2faea30871552f0d74be195720f0ff9395d302a7a05'),
@@ -21,7 +45,7 @@ describe('ringct', () => {
     it('should work for v2', () => {
       assert.deepStrictEqual(ringct.ecdhDecode({
         amount: 'e745cf6a1fe5f04a',
-      },  'ce0ae31063ed7d5f87db7a312b99cadd77786cd366970e3d82e4735a2d65ce05', ringct.RCTTypes.Bulletproof2),
+      }, 'ce0ae31063ed7d5f87db7a312b99cadd77786cd366970e3d82e4735a2d65ce05', ringct.RCTTypes.Bulletproof2),
       {
         amount: hexToBuffer('bb477feedbe8a2f8000000000000000000000000000000000000000000000000'),
         mask: hexToBuffer('13eed709380e0f6fe1eb340291a96c56dae4189a07f32c09bd0fe8b94bd4440b'),

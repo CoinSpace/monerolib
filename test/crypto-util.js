@@ -20,7 +20,7 @@ const state = new Int32Array(new Int8Array(200)
 
 function randomBytes(length) {
   permutation.p1600(state);
-  const buf = Buffer.from(state.buffer);  return buf.slice(0, length);
+  const buf = Buffer.from(state.buffer); return buf.slice(0, length);
 }
 
 __mockRandomBytes__(randomBytes);
