@@ -103,6 +103,16 @@ describe('Wallet', () => {
     });
   });
 
+  describe('getSubaddressSecretKey', () => {
+    it('should generate the right subaddress secret key for account 1 with index 1', () => {
+      const wallet = new Wallet({
+        seed: Buffer.from('8d8c8eeca38ac3b46aa293fd519b3860e96b5f873c12a95e3e1cdeda0bac4903', 'hex'),
+      });
+      const actual = wallet.getSubaddressSecretKey(1, 1);
+      assert.deepStrictEqual(actual, Buffer.from('81dea0953b33dcaed5097a7c2b94cf5e94a5d8fa9796631331ed656da187ea01', 'hex'));
+    });
+  });
+
   describe('getSubaddress', () => {
     let wallet;
     before(() => {
