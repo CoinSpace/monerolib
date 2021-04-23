@@ -103,17 +103,76 @@ describe('Wallet', () => {
     });
   });
 
-  describe('getSubaddressSecretKey', () => {
+  describe('getSubaddressSecret', () => {
     it('should generate the right subaddress secret key for account 1 with index 1', () => {
       const wallet = new Wallet({
         seed: Buffer.from('8d8c8eeca38ac3b46aa293fd519b3860e96b5f873c12a95e3e1cdeda0bac4903', 'hex'),
       });
-      const actual = wallet.getSubaddressSecretKey(1, 1);
+      const actual = wallet.getSubaddressSecret(1, 1);
       assert.deepStrictEqual(actual, Buffer.from('81dea0953b33dcaed5097a7c2b94cf5e94a5d8fa9796631331ed656da187ea01', 'hex'));
     });
   });
 
-  describe('getSubaddress', () => {
+  describe('getSubaddress from full wallet', () => {
+    let wallet;
+    before(() => {
+      wallet = new Wallet({
+        seed: Buffer.from('8d8c8eeca38ac3b46aa293fd519b3860e96b5f873c12a95e3e1cdeda0bac4903', 'hex'),
+      });
+    });
+
+    it('should generate the right address for default account 0 with index 0', () => {
+      const actual = wallet.getSubaddress(0, 0);
+      assert.strictEqual(actual.isViewOnly, false);
+      assert.strictEqual(actual.isSubaddress, false);
+      assert.deepStrictEqual(actual.secretSpendKey, wallet.secretSpendKey);
+      assert.deepStrictEqual(actual.publicSpendKey, wallet.publicSpendKey);
+      assert.deepStrictEqual(actual.publicViewKey, wallet.publicViewKey);
+    });
+
+    it('should generate the right subaddress for account 1 with index 1', () => {
+      const actual = wallet.getSubaddress(1, 1);
+      assert.strictEqual(actual.isViewOnly, false);
+      assert.strictEqual(actual.isSubaddress, true);
+      assert.deepStrictEqual(actual.secretSpendKey, Buffer.from('0e6b2f82dfbd9f6340ac0d7a7d2f08bf7d113882d4a80c726f094448ad333405', 'hex'));
+      assert.deepStrictEqual(actual.publicSpendKey, Buffer.from('4a3e863f2a7a43f7fbaa0320e06982009f2986dd04173eaee32aa8473317f19d', 'hex'));
+      assert.deepStrictEqual(actual.publicViewKey, Buffer.from('d247f90799916273407c1c71230d5ae0a9c71b8a7492da035e5e8ad972eea18b', 'hex'));
+    });
+  });
+
+  describe('getSubaddress from full view only wallet', () => {
+    let wallet;
+    before(() => {
+      wallet = new Wallet({
+        publicSpendKey: Buffer.from('f8631661f6ab4e6fda310c797330d86e23a682f20d5bc8cc27b18051191f16d7', 'hex'),
+        secretViewKey: Buffer.from('99c57d1f0f997bc8ca98559a0ccc3fada3899756e63d1516dba58b7e468cfc05', 'hex'),
+      });
+    });
+
+    it('should generate the right address for default account 0 with index 0', () => {
+      const actual = wallet.getSubaddress(0, 0);
+      assert.strictEqual(actual.isViewOnly, true);
+      assert.strictEqual(actual.isSubaddress, false);
+      assert.throws(() => {
+        actual.secretSpendKey;
+      }, { message: 'Address in view only mode' });
+      assert.deepStrictEqual(actual.publicSpendKey, wallet.publicSpendKey);
+      assert.deepStrictEqual(actual.publicViewKey, wallet.publicViewKey);
+    });
+
+    it('should generate the right subaddress for account 1 with index 1', () => {
+      const actual = wallet.getSubaddress(1, 1);
+      assert.strictEqual(actual.isViewOnly, true);
+      assert.strictEqual(actual.isSubaddress, true);
+      assert.throws(() => {
+        actual.secretSpendKey;
+      }, { message: 'Address in view only mode' });
+      assert.deepStrictEqual(actual.publicSpendKey, Buffer.from('4a3e863f2a7a43f7fbaa0320e06982009f2986dd04173eaee32aa8473317f19d', 'hex'));
+      assert.deepStrictEqual(actual.publicViewKey, Buffer.from('d247f90799916273407c1c71230d5ae0a9c71b8a7492da035e5e8ad972eea18b', 'hex'));
+    });
+  });
+
+  describe('getSubaddress toString', () => {
     let wallet;
     before(() => {
       wallet = new Wallet({
