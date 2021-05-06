@@ -88,4 +88,11 @@ describe('ringct', () => {
       });
     });
   });
+
+  describe('zeroCommit', () => {
+    it('should work', () => {
+      const commit = ringct.zeroCommit(1038074340649);
+      assert.strictEqual(commit.toString('hex'), '9a14487f7a9cce89d066bce74173817b17a5b293827c19c8fbf6b51d01594241');
+    });
+  });
 });
