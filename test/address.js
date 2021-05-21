@@ -31,6 +31,13 @@ describe('Address', () => {
         Address.fromString('173k6DE8Xgj8Uu96bLC38d2W9PE7AeYExgF5nyWt4b8MV3oVd4v9vv1TUgCruhxSac18cL2PpiHuVa14q2zxw9Ax1yJVx47');
       }, { message: 'Invalid address prefix' });
     });
+
+    it('should throw index of address unknown', () => {
+      const address = Address.fromString('47frLjy1UW38Uu96bLC38d2W9PE7AeYExgF5nyWt4b8MV3oVd4v9vv1TUgCruhxSac18cL2PpiHuVa14q2zxw9Ax1xXgiDt');
+      assert.throws(() => {
+        address.index;
+      }, { message: 'Index of address unknown' });
+    });
   });
 });
 

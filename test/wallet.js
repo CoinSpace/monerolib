@@ -128,6 +128,7 @@ describe('Wallet', () => {
       assert.deepStrictEqual(actual.secretSpendKey, wallet.secretSpendKey);
       assert.deepStrictEqual(actual.publicSpendKey, wallet.publicSpendKey);
       assert.deepStrictEqual(actual.publicViewKey, wallet.publicViewKey);
+      assert.deepStrictEqual(actual.index, { major: 0, minor: 0 });
     });
 
     it('should generate the right subaddress for account 1 with index 1', () => {
@@ -137,6 +138,7 @@ describe('Wallet', () => {
       assert.deepStrictEqual(actual.secretSpendKey, Buffer.from('0e6b2f82dfbd9f6340ac0d7a7d2f08bf7d113882d4a80c726f094448ad333405', 'hex'));
       assert.deepStrictEqual(actual.publicSpendKey, Buffer.from('4a3e863f2a7a43f7fbaa0320e06982009f2986dd04173eaee32aa8473317f19d', 'hex'));
       assert.deepStrictEqual(actual.publicViewKey, Buffer.from('d247f90799916273407c1c71230d5ae0a9c71b8a7492da035e5e8ad972eea18b', 'hex'));
+      assert.deepStrictEqual(actual.index, { major: 1, minor: 1 });
     });
   });
 
@@ -158,6 +160,7 @@ describe('Wallet', () => {
       }, { message: 'Address in view only mode' });
       assert.deepStrictEqual(actual.publicSpendKey, wallet.publicSpendKey);
       assert.deepStrictEqual(actual.publicViewKey, wallet.publicViewKey);
+      assert.deepStrictEqual(actual.index, { major: 0, minor: 0 });
     });
 
     it('should generate the right subaddress for account 1 with index 1', () => {
@@ -169,6 +172,7 @@ describe('Wallet', () => {
       }, { message: 'Address in view only mode' });
       assert.deepStrictEqual(actual.publicSpendKey, Buffer.from('4a3e863f2a7a43f7fbaa0320e06982009f2986dd04173eaee32aa8473317f19d', 'hex'));
       assert.deepStrictEqual(actual.publicViewKey, Buffer.from('d247f90799916273407c1c71230d5ae0a9c71b8a7492da035e5e8ad972eea18b', 'hex'));
+      assert.deepStrictEqual(actual.index, { major: 1, minor: 1 });
     });
   });
 
