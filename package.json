@@ -20,7 +20,7 @@
     "url": "https://github.com/CoinSpace/monerolib.git"
   },
   "dependencies": {
-    "base58-monero": "0.0.4",
+    "base58-monero": "0.0.5",
     "bn.js": "^4.12.0",
     "debug": "^4.3.1",
     "elliptic": "^6.5.4",
