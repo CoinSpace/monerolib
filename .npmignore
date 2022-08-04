@@ -1,3 +1,2 @@
 .editorconfig
-*.test.js
-__tests__
+test
