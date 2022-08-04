@@ -4,11 +4,7 @@
   "description": "Monero JavaScript library",
   "author": "Coin Crypto Wallet <support@coin.space> (https://coin.space/)",
   "license": "MIT",
-  "main": "./index.cjs",
-  "exports": {
-    "import": "./index.js",
-    "require": "./index.cjs"
-  },
+  "main": "index.js",
   "type": "module",
   "keywords": [
     "monero",
