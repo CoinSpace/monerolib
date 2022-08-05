@@ -126,17 +126,17 @@ describe('tx', () => {
       assert.strictEqual(size, 2527);
     });
 
-    it('should estimate tx size with 1 in 2 out (bulletproof+clsag)', () => {
+    it('should estimate tx size with 1 in 2 out (bulletproof & clsag)', () => {
       const size = tx.estimateTxSize(1, 10, 2, 44, true, true, false, false);
       assert.strictEqual(size, 1460);
     });
 
-    it('should estimate tx size with 2 in 2 out (bulletproof+clsag)', () => {
+    it('should estimate tx size with 2 in 2 out (bulletproof & clsag)', () => {
       const size = tx.estimateTxSize(2, 10, 2, 44, true, true, false, false);
       assert.strictEqual(size, 1969);
     });
 
-    it('should estimate tx size with 3 in 3 out (bulletproof+clsag)', () => {
+    it('should estimate tx size with 3 in 3 out (bulletproof & clsag)', () => {
       const size = tx.estimateTxSize(3, 10, 3, 44, true, true, false, false);
       assert.strictEqual(size, 2620);
     });
@@ -145,16 +145,31 @@ describe('tx', () => {
   describe('estimate tx weight', () => {
     it('should estimate tx weight with 1 in 2 out', () => {
       const weight = tx.estimateTxWeight(1, 10, 2, 44);
-      assert.strictEqual(weight, 1460);
+      assert.strictEqual(weight, 1366);
     });
 
     it('should estimate tx weight with 2 in 2 out', () => {
       const weight = tx.estimateTxWeight(2, 10, 2, 44);
-      assert.strictEqual(weight, 1969);
+      assert.strictEqual(weight, 1875);
     });
 
     it('should estimate tx weight with 3 in 3 out', () => {
       const weight = tx.estimateTxWeight(3, 10, 3, 44);
+      assert.strictEqual(weight, 2987);
+    });
+
+    it('should estimate tx weight with 1 in 2 out (bulletproof & clsag)', () => {
+      const weight = tx.estimateTxWeight(1, 10, 2, 44, true, true, false, false);
+      assert.strictEqual(weight, 1460);
+    });
+
+    it('should estimate tx weight with 2 in 2 out (bulletproof & clsag)', () => {
+      const weight = tx.estimateTxWeight(2, 10, 2, 44, true, true, false, false);
+      assert.strictEqual(weight, 1969);
+    });
+
+    it('should estimate tx weight with 3 in 3 out (bulletproof & clsag)', () => {
+      const weight = tx.estimateTxWeight(3, 10, 3, 44, true, true, false, false);
       assert.strictEqual(weight, 3157);
     });
   });
@@ -162,16 +177,31 @@ describe('tx', () => {
   describe('estimate tx fee', () => {
     it('should estimate tx fee with 1 in 2 out', () => {
       const fee = tx.estimateFee(1, 10, 2, 44, 6836, 1, 10000);
-      assert.strictEqual(fee, '9990000');
+      assert.strictEqual(fee, '9340000');
     });
 
     it('should estimate tx fee with 2 in 2 out', () => {
       const fee = tx.estimateFee(2, 10, 2, 44, 6836, 1, 10000);
-      assert.strictEqual(fee, '13470000');
+      assert.strictEqual(fee, '12820000');
     });
 
     it('should estimate tx fee with 3 in 3 out', () => {
       const fee = tx.estimateFee(3, 10, 3, 44, 6836, 1, 10000);
+      assert.strictEqual(fee, '20420000');
+    });
+
+    it('should estimate tx fee with 1 in 2 out (bulletproof & clsag)', () => {
+      const fee = tx.estimateFee(1, 10, 2, 44, 6836, 1, 10000, true, true, false, false);
+      assert.strictEqual(fee, '9990000');
+    });
+
+    it('should estimate tx fee with 2 in 2 out (bulletproof & clsag)', () => {
+      const fee = tx.estimateFee(2, 10, 2, 44, 6836, 1, 10000, true, true, false, false);
+      assert.strictEqual(fee, '13470000');
+    });
+
+    it('should estimate tx fee with 3 in 3 out (bulletproof & clsag)', () => {
+      const fee = tx.estimateFee(3, 10, 3, 44, 6836, 1, 10000, true, true, false, false);
       assert.strictEqual(fee, '21590000');
     });
   });
