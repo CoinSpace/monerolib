@@ -113,16 +113,31 @@ describe('tx', () => {
   describe('estimate tx size', () => {
     it('should estimate tx size with 1 in 2 out', () => {
       const size = tx.estimateTxSize(1, 10, 2, 44);
-      assert.strictEqual(size, 1460);
+      assert.strictEqual(size, 1366);
     });
 
     it('should estimate tx size with 2 in 2 out', () => {
       const size = tx.estimateTxSize(2, 10, 2, 44);
-      assert.strictEqual(size, 1969);
+      assert.strictEqual(size, 1875);
     });
 
     it('should estimate tx size with 3 in 3 out', () => {
       const size = tx.estimateTxSize(3, 10, 3, 44);
+      assert.strictEqual(size, 2527);
+    });
+
+    it('should estimate tx size with 1 in 2 out (bulletproof+clsag)', () => {
+      const size = tx.estimateTxSize(1, 10, 2, 44, true, true, false, false);
+      assert.strictEqual(size, 1460);
+    });
+
+    it('should estimate tx size with 2 in 2 out (bulletproof+clsag)', () => {
+      const size = tx.estimateTxSize(2, 10, 2, 44, true, true, false, false);
+      assert.strictEqual(size, 1969);
+    });
+
+    it('should estimate tx size with 3 in 3 out (bulletproof+clsag)', () => {
+      const size = tx.estimateTxSize(3, 10, 3, 44, true, true, false, false);
       assert.strictEqual(size, 2620);
     });
   });
