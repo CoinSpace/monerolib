@@ -176,33 +176,33 @@ describe('tx', () => {
 
   describe('estimate tx fee', () => {
     it('should estimate tx fee with 1 in 2 out', () => {
-      const fee = tx.estimateFee(1, 10, 2, 44, 6836, 1, 10000);
-      assert.strictEqual(fee, '9340000');
+      const fee = tx.estimateFee(1, 15, 2, 44, 6836, 1, 10000);
+      assert.strictEqual(fee, '10510000');
     });
 
     it('should estimate tx fee with 2 in 2 out', () => {
-      const fee = tx.estimateFee(2, 10, 2, 44, 6836, 1, 10000);
-      assert.strictEqual(fee, '12820000');
+      const fee = tx.estimateFee(2, 15, 2, 44, 6836, 1, 10000);
+      assert.strictEqual(fee, '15150000');
     });
 
     it('should estimate tx fee with 3 in 3 out', () => {
-      const fee = tx.estimateFee(3, 10, 3, 44, 6836, 1, 10000);
-      assert.strictEqual(fee, '20420000');
+      const fee = tx.estimateFee(3, 15, 3, 44, 6836, 1, 10000);
+      assert.strictEqual(fee, '23910000');
     });
 
     it('should estimate tx fee with 1 in 2 out (bulletproof & clsag)', () => {
-      const fee = tx.estimateFee(1, 10, 2, 44, 6836, 1, 10000, true, true, false, false);
-      assert.strictEqual(fee, '9990000');
+      const fee = tx.estimateFee(1, 15, 2, 44, 6836, 1, 10000, true, true, false, false);
+      assert.strictEqual(fee, '11150000');
     });
 
     it('should estimate tx fee with 2 in 2 out (bulletproof & clsag)', () => {
-      const fee = tx.estimateFee(2, 10, 2, 44, 6836, 1, 10000, true, true, false, false);
-      assert.strictEqual(fee, '13470000');
+      const fee = tx.estimateFee(2, 15, 2, 44, 6836, 1, 10000, true, true, false, false);
+      assert.strictEqual(fee, '15790000');
     });
 
     it('should estimate tx fee with 3 in 3 out (bulletproof & clsag)', () => {
-      const fee = tx.estimateFee(3, 10, 3, 44, 6836, 1, 10000, true, true, false, false);
-      assert.strictEqual(fee, '21590000');
+      const fee = tx.estimateFee(3, 15, 3, 44, 6836, 1, 10000, true, true, false, false);
+      assert.strictEqual(fee, '25070000');
     });
   });
 
