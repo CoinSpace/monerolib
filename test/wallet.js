@@ -1,6 +1,6 @@
 /* eslint-disable max-len */
+import Wallet from '../lib/Wallet.js';
 import assert from 'assert';
-import Wallet from '../lib/wallet.js';
 
 describe('Wallet', () => {
   describe('constructor', () => {

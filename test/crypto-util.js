@@ -1,9 +1,9 @@
 /* eslint-disable max-len */
-import assert from 'assert';
-import fs from 'fs/promises';
-import elliptic from 'elliptic';
-import cryptoUtil from '../lib/crypto-util.js';
 import { __mockRandomBytes__ } from '../lib/crypto-util.js';
+import assert from 'assert';
+import cryptoUtil from '../lib/crypto-util.js';
+import elliptic from 'elliptic';
+import fs from 'fs/promises';
 import permutation from '../node_modules/keccak/lib/keccak-state-unroll.js';
 
 const ec = new elliptic.eddsa('ed25519');

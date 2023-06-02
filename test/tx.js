@@ -1,8 +1,8 @@
 /* eslint-disable max-len */
 import assert from 'assert';
-import tx from '../lib/tx.js';
 import fs from 'fs/promises';
 import { hexToBuffer } from '../lib/helpers.js';
+import tx from '../lib/tx.js';
 
 const getTxIdFromHexFixtures = JSON.parse(await fs.readFile('./test/fixtures/get_tx_id_from_hex.json', { encoding: 'utf8' }));
 

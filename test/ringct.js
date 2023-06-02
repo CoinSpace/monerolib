@@ -1,7 +1,7 @@
 /* eslint-disable max-len */
 import assert from 'assert';
-import ringct from '../lib/ringct.js';
 import { hexToBuffer } from '../lib/helpers.js';
+import ringct from '../lib/ringct.js';
 
 describe('ringct', () => {
 

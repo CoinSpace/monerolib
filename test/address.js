@@ -1,6 +1,6 @@
 /* eslint-disable max-len */
+import Address from '../lib/Address.js';
 import assert from 'assert';
-import Address from '../lib/address.js';
 
 describe('Address', () => {
   describe('fromString', () => {
