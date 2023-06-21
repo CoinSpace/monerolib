@@ -4,7 +4,7 @@ import assert from 'assert';
 import cryptoUtil from '../lib/crypto-util.js';
 import elliptic from 'elliptic';
 import fs from 'fs/promises';
-import permutation from '../node_modules/keccak/lib/keccak-state-unroll.js';
+import { keccakP } from '@noble/hashes/sha3';
 
 const ec = new elliptic.eddsa('ed25519');
 
@@ -19,8 +19,9 @@ const state = new Int32Array(new Int8Array(200)
   .buffer);
 
 function randomBytes(length) {
-  permutation.p1600(state);
-  const buf = Buffer.from(state.buffer); return buf.slice(0, length);
+  keccakP(state);
+  const buf = Buffer.from(state.buffer);
+  return buf.subarray(0, length);
 }
 
 __mockRandomBytes__(randomBytes);
