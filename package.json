@@ -1,6 +1,6 @@
 {
   "name": "monerolib",
-  "version": "1.1.5",
+  "version": "1.2.0",
   "description": "Monero JavaScript library",
   "author": "Coin Crypto Wallet <support@coin.space> (https://coin.space/)",
   "license": "MIT",
