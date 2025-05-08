@@ -11,11 +11,18 @@ describe('tx', () => {
   describe('parseTxExtra', () => {
 
     const NIL = Buffer.alloc(0);
+    const NIL_TX_PUB_KEY = Buffer.alloc(32);
     const TX_EXTRA_PADDING_MAX_COUNT = 255;
-    const empty = { txPubKey: NIL, encryptedPaymentId: NIL, additionalPubKeys: [] };
+    const empty = { txPubKey: NIL_TX_PUB_KEY, encryptedPaymentId: NIL, additionalPubKeys: [] };
 
     it('should handle empty extra', () => {
       const result = tx.parseTxExtra(Buffer.from([]));
+      assert.deepStrictEqual(result, empty);
+    });
+
+    // https://xmrchain.net/tx/f64bbe722d0ef4ae96d8b6dccf693ce8ca9b525e8c47fe9642040f744870d64b
+    it('should handle empty txPubKey', () => {
+      const result = tx.parseTxExtra(hexToBuffer('0321001a36d20bc8a84a04be188f3a0f8b76b9f4e66f000230e8d3f8ab72777a7520f100000083d9c85c1dccceb0ee3532ef7c9528ae4dfe2ca79b139f4637a3ba16de8d02110000000000000000000000000000000000'));
       assert.deepStrictEqual(result, empty);
     });
 
