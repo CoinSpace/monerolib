@@ -12,48 +12,21 @@
     "crypto"
   ],
   "scripts": {
-    "test": "mocha",
-    "lint": "eslint index.js lib/*.js test/*.js"
+    "test": "node --test",
+    "lint": "eslint --report-unused-disable-directives ."
   },
   "repository": {
     "type": "git",
     "url": "https://github.com/CoinSpace/monerolib.git"
   },
   "dependencies": {
-    "@noble/hashes": "^1.3.1",
-    "@scure/base": "^1.1.1",
-    "bn.js": "^4.12.0",
-    "buffer": "^6.0.3",
-    "elliptic": "^6.5.4",
+    "@noble/curves": "^2.2.0",
+    "@noble/hashes": "^2.2.0",
+    "@scure/base": "^2.2.0",
     "varint": "^6.0.0"
   },
   "devDependencies": {
-    "eslint": "^8.20.0",
-    "eslint-config-coinspace": "^2.0.0",
-    "mocha": "^10.0.0"
-  },
-  "eslintConfig": {
-    "extends": [
-      "coinspace"
-    ],
-    "env": {
-      "browser": true
-    },
-    "parserOptions": {
-      "requireConfigFile": false,
-      "sourceType": "module"
-    },
-    "overrides": [
-      {
-        "files": [
-          "*.test.js",
-          "test/*"
-        ],
-        "env": {
-          "node": true,
-          "mocha": true
-        }
-      }
-    ]
+    "eslint": "^10.0.0",
+    "eslint-config-coinspace": "^4.0.0"
   }
 }
