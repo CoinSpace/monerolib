@@ -1,8 +1,9 @@
 /* eslint-disable max-len */
-import assert from 'assert';
+import assert from 'node:assert';
 import fs from 'fs/promises';
-import { hexToBuffer } from '../lib/helpers.js';
 import tx from '../lib/tx.js';
+import { bytesToHex, hexToBytes } from '@noble/hashes/utils.js';
+import { describe, it } from 'node:test';
 
 const getTxIdFromHexFixtures = JSON.parse(await fs.readFile('./test/fixtures/get_tx_id_from_hex.json', { encoding: 'utf8' }));
 
@@ -10,99 +11,99 @@ describe('tx', () => {
 
   describe('parseTxExtra', () => {
 
-    const NIL = Buffer.alloc(0);
-    const NIL_TX_PUB_KEY = Buffer.alloc(32);
+    const NIL = new Uint8Array(0);
+    const NIL_TX_PUB_KEY = new Uint8Array(32);
     const TX_EXTRA_PADDING_MAX_COUNT = 255;
     const empty = { txPubKey: NIL_TX_PUB_KEY, encryptedPaymentId: NIL, additionalPubKeys: [] };
 
     it('should handle empty extra', () => {
-      const result = tx.parseTxExtra(Buffer.from([]));
+      const result = tx.parseTxExtra(Uint8Array.from([]));
       assert.deepStrictEqual(result, empty);
     });
 
     // https://xmrchain.net/tx/f64bbe722d0ef4ae96d8b6dccf693ce8ca9b525e8c47fe9642040f744870d64b
     it('should handle empty txPubKey', () => {
-      const result = tx.parseTxExtra(hexToBuffer('0321001a36d20bc8a84a04be188f3a0f8b76b9f4e66f000230e8d3f8ab72777a7520f100000083d9c85c1dccceb0ee3532ef7c9528ae4dfe2ca79b139f4637a3ba16de8d02110000000000000000000000000000000000'));
+      const result = tx.parseTxExtra(hexToBytes('0321001a36d20bc8a84a04be188f3a0f8b76b9f4e66f000230e8d3f8ab72777a7520f100000083d9c85c1dccceb0ee3532ef7c9528ae4dfe2ca79b139f4637a3ba16de8d02110000000000000000000000000000000000'));
       assert.deepStrictEqual(result, empty);
     });
 
     it('should handle padding only size 1', () => {
-      const result = tx.parseTxExtra(Buffer.from([0]));
+      const result = tx.parseTxExtra(Uint8Array.from([0]));
       assert.deepStrictEqual(result, empty);
     });
 
     it('should handle padding only size 2', () => {
-      const result = tx.parseTxExtra(Buffer.from([0, 0]));
+      const result = tx.parseTxExtra(Uint8Array.from([0, 0]));
       assert.deepStrictEqual(result, empty);
     });
 
     it('should handle padding only max size', () => {
-      const result = tx.parseTxExtra(Buffer.alloc(TX_EXTRA_PADDING_MAX_COUNT));
+      const result = tx.parseTxExtra(new Uint8Array(TX_EXTRA_PADDING_MAX_COUNT));
       assert.deepStrictEqual(result, empty);
     });
 
     it('should handle padding only exceed max size', () => {
-      const result = tx.parseTxExtra(Buffer.alloc(TX_EXTRA_PADDING_MAX_COUNT + 1));
+      const result = tx.parseTxExtra(new Uint8Array(TX_EXTRA_PADDING_MAX_COUNT + 1));
       assert.deepStrictEqual(result, empty);
     });
 
     it('should handle invalid padding only', () => {
-      const result = tx.parseTxExtra(Buffer.from([0, 42]));
+      const result = tx.parseTxExtra(Uint8Array.from([0, 42]));
       assert.deepStrictEqual(result, empty);
     });
 
     it('should handle pub key only', () => {
-      const result = tx.parseTxExtra(Buffer.from([1, 30, 208, 98, 162, 133, 64, 85, 83, 112, 91, 188, 89, 211, 24, 131, 39, 154, 22, 228, 80, 63, 198, 141, 173, 111, 244, 183, 4, 149, 186, 140, 230]));
-      assert.deepStrictEqual(result, { txPubKey: hexToBuffer('1ed062a285405553705bbc59d31883279a16e4503fc68dad6ff4b70495ba8ce6'), encryptedPaymentId: NIL, additionalPubKeys: [] });
+      const result = tx.parseTxExtra(Uint8Array.from([1, 30, 208, 98, 162, 133, 64, 85, 83, 112, 91, 188, 89, 211, 24, 131, 39, 154, 22, 228, 80, 63, 198, 141, 173, 111, 244, 183, 4, 149, 186, 140, 230]));
+      assert.deepStrictEqual(result, { txPubKey: hexToBytes('1ed062a285405553705bbc59d31883279a16e4503fc68dad6ff4b70495ba8ce6'), encryptedPaymentId: NIL, additionalPubKeys: [] });
     });
 
     it('should handle extra nonce only', () => {
-      const result = tx.parseTxExtra(Buffer.from([2, 1, 42]));
+      const result = tx.parseTxExtra(Uint8Array.from([2, 1, 42]));
       assert.deepStrictEqual(result, empty);
     });
 
     it('should handle pub key and padding', () => {
-      const result = tx.parseTxExtra(Buffer.from([1, 30, 208, 98, 162, 133, 64, 85, 83, 112, 91, 188, 89, 211, 24, 131, 39, 154, 22, 228,
+      const result = tx.parseTxExtra(Uint8Array.from([1, 30, 208, 98, 162, 133, 64, 85, 83, 112, 91, 188, 89, 211, 24, 131, 39, 154, 22, 228,
         80, 63, 198, 141, 173, 111, 244, 183, 4, 149, 186, 140, 230, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
         0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
         0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]));
-      assert.deepStrictEqual(result, { txPubKey: hexToBuffer('1ed062a285405553705bbc59d31883279a16e4503fc68dad6ff4b70495ba8ce6'), encryptedPaymentId: NIL, additionalPubKeys: [] });
+      assert.deepStrictEqual(result, { txPubKey: hexToBytes('1ed062a285405553705bbc59d31883279a16e4503fc68dad6ff4b70495ba8ce6'), encryptedPaymentId: NIL, additionalPubKeys: [] });
     });
 
     it('should handle two pub keys', () => {
-      const result = tx.parseTxExtra(Buffer.from([1, 30, 208, 98, 162, 133, 64, 85, 83, 112, 91, 188, 89, 211, 24, 131, 39, 154, 22, 228,
+      const result = tx.parseTxExtra(Uint8Array.from([1, 30, 208, 98, 162, 133, 64, 85, 83, 112, 91, 188, 89, 211, 24, 131, 39, 154, 22, 228,
         80, 63, 198, 141, 173, 111, 244, 183, 4, 149, 186, 140, 230,
         1, 30, 208, 98, 162, 133, 64, 85, 83, 112, 91, 188, 89, 211, 24, 131, 39, 154, 22, 228,
         80, 63, 198, 141, 173, 111, 244, 183, 4, 149, 186, 140, 230]));
-      assert.deepStrictEqual(result, { txPubKey: hexToBuffer('1ed062a285405553705bbc59d31883279a16e4503fc68dad6ff4b70495ba8ce6'), encryptedPaymentId: NIL, additionalPubKeys: [] });
+      assert.deepStrictEqual(result, { txPubKey: hexToBytes('1ed062a285405553705bbc59d31883279a16e4503fc68dad6ff4b70495ba8ce6'), encryptedPaymentId: NIL, additionalPubKeys: [] });
     });
 
     it('should handle pub key with encrypted payment id', () => {
-      const result = tx.parseTxExtra(Buffer.from([1, 30, 208, 98, 162, 133, 64, 85, 83, 112, 91, 188, 89, 211, 24, 131, 39, 154, 22, 228,
+      const result = tx.parseTxExtra(Uint8Array.from([1, 30, 208, 98, 162, 133, 64, 85, 83, 112, 91, 188, 89, 211, 24, 131, 39, 154, 22, 228,
         80, 63, 198, 141, 173, 111, 244, 183, 4, 149, 186, 140, 230,
         2, 9, 1, 0, 0, 0, 0, 0, 0, 0, 0]));
-      assert.deepStrictEqual(result, { txPubKey: hexToBuffer('1ed062a285405553705bbc59d31883279a16e4503fc68dad6ff4b70495ba8ce6'), encryptedPaymentId: hexToBuffer('0000000000000000', 8), additionalPubKeys: [] });
+      assert.deepStrictEqual(result, { txPubKey: hexToBytes('1ed062a285405553705bbc59d31883279a16e4503fc68dad6ff4b70495ba8ce6'), encryptedPaymentId: hexToBytes('0000000000000000'), additionalPubKeys: [] });
     });
 
     it('should handle pub key with encrypted payment id (reverse order)', () => {
-      const result = tx.parseTxExtra(Buffer.from([2, 9, 1, 0, 0, 0, 0, 0, 0, 0, 0,
+      const result = tx.parseTxExtra(Uint8Array.from([2, 9, 1, 0, 0, 0, 0, 0, 0, 0, 0,
         1, 30, 208, 98, 162, 133, 64, 85, 83, 112, 91, 188, 89, 211, 24, 131, 39, 154, 22, 228,
         80, 63, 198, 141, 173, 111, 244, 183, 4, 149, 186, 140, 230]));
-      assert.deepStrictEqual(result, { txPubKey: hexToBuffer('1ed062a285405553705bbc59d31883279a16e4503fc68dad6ff4b70495ba8ce6'), encryptedPaymentId: hexToBuffer('0000000000000000', 8), additionalPubKeys: [] });
+      assert.deepStrictEqual(result, { txPubKey: hexToBytes('1ed062a285405553705bbc59d31883279a16e4503fc68dad6ff4b70495ba8ce6'), encryptedPaymentId: hexToBytes('0000000000000000'), additionalPubKeys: [] });
     });
 
     it('should additional pub keys', () => {
-      const result = tx.parseTxExtra(Buffer.from([1, 59, 54, 37, 207, 182, 88, 66, 252, 62, 68, 82, 69, 144, 143, 155, 23, 27, 78, 24, 153, 84, 63, 183, 13, 133, 66, 79, 217, 177, 201, 94, 185,
+      const result = tx.parseTxExtra(Uint8Array.from([1, 59, 54, 37, 207, 182, 88, 66, 252, 62, 68, 82, 69, 144, 143, 155, 23, 27, 78, 24, 153, 84, 63, 183, 13, 133, 66, 79, 217, 177, 201, 94, 185,
         4, 3, 252, 23, 118, 225, 66, 173, 231, 164, 173, 94, 0, 189, 39, 164, 128, 1, 63, 6, 196, 93, 90, 200, 8, 7, 211, 96, 149, 0, 189, 210, 108, 242, 152, 112, 95, 250, 198, 110, 246, 61, 103,
         203, 88, 114, 182, 252, 34, 40, 121, 144, 46, 219, 231, 163, 204, 184, 50, 120, 200, 42, 95, 173, 9, 124, 207, 193, 216, 157, 94, 95, 186, 83, 166, 138, 35, 130, 57, 235, 213, 246, 13, 96,
         50, 125, 34, 218, 62, 233, 90, 156, 7, 6, 116, 234, 82, 90]));
       assert.deepStrictEqual(result, {
-        txPubKey: hexToBuffer('3b3625cfb65842fc3e445245908f9b171b4e1899543fb70d85424fd9b1c95eb9'),
+        txPubKey: hexToBytes('3b3625cfb65842fc3e445245908f9b171b4e1899543fb70d85424fd9b1c95eb9'),
         encryptedPaymentId: NIL,
         additionalPubKeys: [
-          hexToBuffer('fc1776e142ade7a4ad5e00bd27a480013f06c45d5ac80807d3609500bdd26cf2'),
-          hexToBuffer('98705ffac66ef63d67cb5872b6fc222879902edbe7a3ccb83278c82a5fad097c'),
-          hexToBuffer('cfc1d89d5e5fba53a68a238239ebd5f60d60327d22da3ee95a9c070674ea525a'),
+          hexToBytes('fc1776e142ade7a4ad5e00bd27a480013f06c45d5ac80807d3609500bdd26cf2'),
+          hexToBytes('98705ffac66ef63d67cb5872b6fc222879902edbe7a3ccb83278c82a5fad097c'),
+          hexToBytes('cfc1d89d5e5fba53a68a238239ebd5f60d60327d22da3ee95a9c070674ea525a'),
         ],
       });
     });
@@ -112,7 +113,7 @@ describe('tx', () => {
     it('should work', () => {
       getTxIdFromHexFixtures.forEach((fixture) => {
         const actual = tx.getTxIdFromHex(fixture.hex);
-        assert.strictEqual(actual.toString('hex'), fixture.result);
+        assert.strictEqual(bytesToHex(actual), fixture.result);
       });
     });
   });
