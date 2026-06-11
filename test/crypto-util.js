@@ -8,7 +8,7 @@ import { keccakP } from '@noble/hashes/sha3.js';
 import { bytesToHex, hexToBytes } from '@noble/hashes/utils.js';
 import { describe, it } from 'node:test';
 
-// https://github.com/monero-project/monero/blob/v0.17.1.9/tests/crypto/tests.txt
+// https://github.com/monero-project/monero/blob/v0.18.5.0/tests/crypto/tests.txt
 const tests = (await fs.readFile('./test/fixtures/tests.txt', { encoding: 'utf8' })).split('\n');
 
 /**
@@ -140,6 +140,16 @@ describe('crypto-util', () => {
         describe('deriveSecretKey', () => {
           it(`derivation '${derivation}' index '${index}' base: '${base}' to be derived '${expected}'`, () => {
             const actual = cryptoUtil.deriveSecretKey(hexToBytes(derivation), parseInt(index), hexToBytes(base));
+            assert.strictEqual(bytesToHex(actual), expected);
+          });
+        });
+        break;
+      }
+      case 'derive_view_tag': {
+        const [derivation, index, expected] = rest;
+        describe('deriveViewTag', () => {
+          it(`derivation '${derivation}' index '${index}' to be view tag '${expected}'`, () => {
+            const actual = cryptoUtil.deriveViewTag(hexToBytes(derivation), parseInt(index));
             assert.strictEqual(bytesToHex(actual), expected);
           });
         });
