@@ -12,7 +12,7 @@ import { describe, it } from 'node:test';
 const tests = (await fs.readFile('./test/fixtures/tests.txt', { encoding: 'utf8' })).split('\n');
 
 /**
- * https://github.com/monero-project/monero/blob/v0.17.1.9/tests/crypto/random.c#L36
+ * https://github.com/monero-project/monero/blob/v0.18.5.0/tests/crypto/random.c#L35-L37
  */
 const state = new Uint32Array(new Int8Array(200)
   .fill(42)
