@@ -1,11 +1,10 @@
 /* eslint-disable max-len */
 import assert from 'node:assert';
-import fs from 'fs/promises';
 import tx from '../lib/tx.js';
 import { bytesToHex, hexToBytes } from '@noble/hashes/utils.js';
 import { describe, it } from 'node:test';
 
-const getTxIdFromHexFixtures = JSON.parse(await fs.readFile('./test/fixtures/get_tx_id_from_hex.json', { encoding: 'utf8' }));
+import txFixtures from './fixtures/txs.json' with { type: 'json' };
 
 describe('tx', () => {
 
@@ -111,9 +110,9 @@ describe('tx', () => {
 
   describe('getTxIdFromHex', () => {
     it('should work', () => {
-      getTxIdFromHexFixtures.forEach((fixture) => {
+      txFixtures.forEach((fixture) => {
         const actual = tx.getTxIdFromHex(fixture.hex);
-        assert.strictEqual(bytesToHex(actual), fixture.result);
+        assert.strictEqual(bytesToHex(actual), fixture.id);
       });
     });
   });
