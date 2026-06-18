@@ -1,12 +1,12 @@
 import assert from 'node:assert/strict';
 import { bytesToHex, hexToBytes } from '@noble/hashes/utils.js';
 import { describe, it } from 'node:test';
-import { keyV, rctBase, rctPrunable, transaction, varint, varintNum } from '../lib/raw.js';
+import { keyV, rctBase, rctPrunable, transaction, varintBigInt, varintNumber } from '../lib/raw.js';
 
 import txFixtures from './fixtures/txs.json' with { type: 'json' };
 
 describe('raw', () => {
-  describe('varint', () => {
+  describe('varintBigInt', () => {
     // LEB128, matching monero src/common/varint.h
     const vectors = [
       [0n, '00'],
@@ -21,38 +21,46 @@ describe('raw', () => {
 
     it('encodes', () => {
       for (const [value, hex] of vectors) {
-        assert.equal(bytesToHex(varint.encode(value)), hex);
+        assert.equal(bytesToHex(varintBigInt.encode(value)), hex);
       }
     });
 
     it('decodes', () => {
       for (const [value, hex] of vectors) {
-        assert.equal(varint.decode(hexToBytes(hex)), value);
+        assert.equal(varintBigInt.decode(hexToBytes(hex)), value);
       }
     });
 
     it('rejects non-canonical representation', () => {
-      assert.throws(() => varint.decode(hexToBytes('8000')));
+      assert.throws(() => varintBigInt.decode(hexToBytes('8000')));
     });
 
     it('rejects values overflowing uint64', () => {
       // 11-byte varint encoding 2^70, beyond uint64
-      assert.throws(() => varint.decode(hexToBytes('8080808080808080808004')));
-      assert.throws(() => varint.encode(2n ** 64n));
+      assert.throws(() => varintBigInt.decode(hexToBytes('8080808080808080808004')));
+      assert.throws(() => varintBigInt.encode(2n ** 64n));
+    });
+
+    it('encodes bigint only, no type coercion', () => {
+      assert.throws(() => varintBigInt.encode(1));
+      assert.throws(() => varintBigInt.encode('1'));
+      assert.throws(() => varintBigInt.encode(true));
+      // the number-level entry stays varintNum
+      assert.deepEqual(varintNumber.encode(1), varintBigInt.encode(1n));
     });
 
     // mirrors monero TEST(varint, equal)
     // https://github.com/monero-project/monero/blob/v0.18.5.0/tests/unit_tests/varint.cpp#L48
     it('round-trips 0..65536', () => {
       for (let i = 0n; i <= 65536n; i++) {
-        assert.equal(varint.decode(varint.encode(i)), i);
+        assert.equal(varintBigInt.decode(varintBigInt.encode(i)), i);
       }
     });
   });
 
-  describe('varintNum', () => {
+  describe('varintNumber', () => {
     it('round-trips as a number', () => {
-      assert.equal(varintNum.decode(varintNum.encode(300)), 300);
+      assert.equal(varintNumber.decode(varintNumber.encode(300)), 300);
     });
   });
 
