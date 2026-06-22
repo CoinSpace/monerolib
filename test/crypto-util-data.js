@@ -1,7 +1,9 @@
 /* eslint-disable max-len */
 import { FpSqrtEven } from '@noble/curves/abstract/modular.js';
 import assert from 'node:assert/strict';
-import { A, Fp, fffb1, fffb2, fffb3, fffb4, ma, sqrtm1 } from '../lib/crypto-util-data.js';
+import { A, H, INV_EIGHT, fffb1, fffb2, fffb3, fffb4, ma, sqrtm1 } from '../lib/crypto-util-data.js';
+import { Fn, Fp, Point, fastHash } from '../lib/crypto-util.js';
+import { decodePoint, encodePoint } from '../lib/helpers.js';
 import { describe, it } from 'node:test';
 
 // ref10 fe: a field element mod 2^255-19 stored as 10 signed limbs, radix 2^25.5
@@ -75,6 +77,22 @@ describe('crypto-util-data', () => {
     // https://github.com/monero-project/monero/blob/v0.18.5.0/src/crypto/crypto-ops-data.c#L872
     it('fffb4', () => {
       assert.equal(fffb4, feToBigInt([-21786234, -12173074, 21573800, 4524538, -4645904, 16204591, 8012863, -8444712, 3212926, 6885324]));
+    });
+  });
+
+  // verify the hardcoded rct byte constants are mathematically what monero says they are
+  describe('rct constants', () => {
+    // H = 8 * decodePoint(cn_fast_hash(G)), G the basepoint
+    // https://github.com/monero-project/monero/blob/v0.18.5.0/src/ringct/rctTypes.h#L633
+    it('H is the second generator', () => {
+      const derived = decodePoint(fastHash(encodePoint(Point.BASE))).clearCofactor();
+      assert.ok(H.equals(derived));
+    });
+
+    // INV_EIGHT = 1/8 mod l
+    // https://github.com/monero-project/monero/blob/v0.18.5.0/src/ringct/rctOps.h#L67
+    it('INV_EIGHT is 1/8 mod l', () => {
+      assert.equal(INV_EIGHT, Fn.inv(8n));
     });
   });
 });

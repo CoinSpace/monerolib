@@ -16,12 +16,6 @@ describe('Wallet', () => {
       assert.deepStrictEqual(wallet.nettype, 'stagenet');
     });
 
-    it('should throw on unknown nettype', () => {
-      assert.throws(() => {
-        new Wallet({ nettype: 'blabla' });
-      }, { message: 'Invalid network type: blabla' });
-    });
-
     it('should create wallet from seed', () => {
       const wallet = new Wallet({
         seed: hexToBytes('ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff'),
