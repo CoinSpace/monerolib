@@ -47,7 +47,7 @@ PVi = pV * (pS + HS(pV | i)) * G
 ## Outputs
 
 * `r` - is the transaction private/secret key
-* `R` - is the transaction public key, `txPubKey`
+* `R` - is the transaction public key, `txPublicKey`
 * `X` - is the stealth address or one time address `targetKey`
 
 Fro address:
