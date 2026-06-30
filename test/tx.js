@@ -244,6 +244,27 @@ describe('tx', () => {
       assert.ok(recipientFinds(out, 0, s));
     });
 
+    it('two distinct subaddresses use additional keys (R = r*G)', () => {
+      const s1 = subWallet();
+      const s2 = subWallet();
+      const r = randomScalar();
+      const out = tx.generateOutputs([s1, s2], r);
+      assert.equal(out.additionalPublicKeys.length, 2);
+      assert.deepStrictEqual(out.txPublicKey, secretKeyToPublicKey(r));
+      assert.ok(recipientFinds(out, 0, s1));
+      assert.ok(recipientFinds(out, 1, s2));
+    });
+
+    it('duplicate subaddress is deduped: R = r*D, no additional keys', () => {
+      const s = subWallet();
+      const r = randomScalar();
+      const out = tx.generateOutputs([s, s], r);
+      assert.equal(out.additionalPublicKeys.length, 0);
+      assert.deepStrictEqual(out.txPublicKey, encodePoint(decodePoint(s.spendPublicKey).multiplyUnsafe(decodeInt(r))));
+      assert.ok(recipientFinds(out, 0, s));
+      assert.ok(recipientFinds(out, 1, s));
+    });
+
     it('change derives from a*R and stays detectable (single subaddress + change)', () => {
       const s = subWallet();
       const sender = stdWallet();
