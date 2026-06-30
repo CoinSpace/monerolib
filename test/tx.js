@@ -374,10 +374,10 @@ describe('tx', () => {
     });
   });
 
-  describe('getTxIdFromHex', () => {
+  describe('getTxId', () => {
     it('should work', () => {
       txFixtures.forEach((fixture) => {
-        const actual = tx.getTxIdFromHex(fixture.hex);
+        const actual = tx.getTxId(hexToBytes(fixture.hex));
         assert.strictEqual(bytesToHex(actual), fixture.id);
       });
     });
