@@ -3,12 +3,12 @@ import { describe, it } from 'node:test';
 import { hexToBytes, randomBytes } from '@noble/hashes/utils.js';
 
 import * as bulletproofs from '../lib/bulletproofs.js';
-import * as cryptoUtil from '../lib/crypto-util.js';
+import * as crypto from '../lib/crypto.js';
 import * as helpers from '../lib/helpers.js';
 import * as raw from '../lib/raw.js';
 import txs from './fixtures/txs.json' with { type: 'json' };
 
-const masksFor = (amounts) => amounts.map(() => cryptoUtil.randomScalar());
+const masksFor = (amounts) => amounts.map(() => crypto.randomScalar());
 
 // low-order points, verbatim from the monero unit test
 // https://github.com/monero-project/monero/blob/v0.18.5.0/tests/unit_tests/bulletproofs_plus.cpp#L115-L124
@@ -57,7 +57,7 @@ const ORIGINAL_BP_PROOF = {
 const ORIGINAL_BP_V = [
   '8e8f23f315edae4f6c2f948d9a861e0ae32d356b933cd11d2f0e031ac744c41f',
   '2829cbd025aa54cd6e1b59a032564f22f0b2e5627f7f2c4297f90da438b5510f',
-].map((h) => cryptoUtil.encodePoint(cryptoUtil.decodePoint(hexToBytes(h)).clearCofactor()));
+].map((h) => crypto.encodePoint(crypto.decodePoint(hexToBytes(h)).clearCofactor()));
 
 // mirrors monero tests/unit_tests/bulletproofs_plus.cpp
 // https://github.com/monero-project/monero/blob/v0.18.5.0/tests/unit_tests/bulletproofs_plus.cpp
@@ -105,7 +105,7 @@ describe('bulletproofs plus', () => {
     it('tampered scalar r1', () => {
       const amounts = [1000n, 2000n];
       const { proof, V } = bulletproofs.proveRangeBulletproofPlus(amounts, masksFor(amounts));
-      assert.ok(!bulletproofs.verifyBulletproofPlus({ ...proof, r1: helpers.encodeInt(cryptoUtil.randomScalar()) }, V));
+      assert.ok(!bulletproofs.verifyBulletproofPlus({ ...proof, r1: helpers.encodeInt(crypto.randomScalar()) }, V));
     });
 
     // monero rejects non-canonical (>= l) proof scalars via is_reduced
@@ -114,7 +114,7 @@ describe('bulletproofs plus', () => {
       const amounts = [1000n, 2000n];
       const { proof, V } = bulletproofs.proveRangeBulletproofPlus(amounts, masksFor(amounts));
       for (const field of ['r1', 's1', 'd1']) {
-        const bad = { ...proof, [field]: helpers.encodeInt(helpers.decodeInt(proof[field]) + cryptoUtil.CURVE.n) };
+        const bad = { ...proof, [field]: helpers.encodeInt(helpers.decodeInt(proof[field]) + crypto.CURVE.n) };
         assert.ok(!bulletproofs.verifyBulletproofPlus(bad, V));
       }
     });
@@ -138,8 +138,8 @@ describe('bulletproofs plus', () => {
       const { proof, V } = bulletproofs.proveRangeBulletproofPlus(amounts, masksFor(amounts));
       assert.ok(bulletproofs.verifyBulletproofPlus(proof, V));
       for (const xs of TORSION_ELEMENTS) {
-        const addT = (b) => cryptoUtil.encodePoint(
-          cryptoUtil.decodePoint(b).add(cryptoUtil.decodePoint(hexToBytes(xs)))
+        const addT = (b) => crypto.encodePoint(
+          crypto.decodePoint(b).add(crypto.decodePoint(hexToBytes(xs)))
         );
         for (const field of ['A', 'A1', 'B']) {
           assert.ok(!bulletproofs.verifyBulletproofPlus({ ...proof, [field]: addT(proof[field]) }, V));
@@ -159,7 +159,7 @@ describe('bulletproofs plus', () => {
       const proof = tx.rctSigPrunable.bulletproofs[0];
       const { outPk } = tx.rctSigBase;
       assert.ok(bulletproofs.verifyBulletproof(proof, outPk));
-      const bad = { ...proof, taux: helpers.encodeInt(helpers.decodeInt(proof.taux) + cryptoUtil.CURVE.n) };
+      const bad = { ...proof, taux: helpers.encodeInt(helpers.decodeInt(proof.taux) + crypto.CURVE.n) };
       assert.ok(!bulletproofs.verifyBulletproof(bad, outPk));
     });
   });
@@ -173,8 +173,8 @@ describe('bulletproofs plus', () => {
   it('rejects torsioned points in an original Bulletproof', () => {
     assert.ok(bulletproofs.verifyBulletproof(ORIGINAL_BP_PROOF, ORIGINAL_BP_V));
     for (const xs of TORSION_ELEMENTS) {
-      const addT = (b) => cryptoUtil.encodePoint(
-        cryptoUtil.decodePoint(b).add(cryptoUtil.decodePoint(hexToBytes(xs)))
+      const addT = (b) => crypto.encodePoint(
+        crypto.decodePoint(b).add(crypto.decodePoint(hexToBytes(xs)))
       );
       for (const field of ['A', 'S', 'T1', 'T2']) {
         assert.ok(!bulletproofs.verifyBulletproof(
