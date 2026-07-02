@@ -1,8 +1,9 @@
 /* eslint-disable max-len */
-import Address from '../lib/Address.js';
 import assert from 'node:assert';
 import { hexToBytes } from '@noble/hashes/utils.js';
 import { describe, it } from 'node:test';
+
+import Address from '../lib/Address.js';
 
 describe('Address', () => {
   describe('fromString', () => {

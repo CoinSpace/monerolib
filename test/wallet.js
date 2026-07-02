@@ -1,8 +1,9 @@
 /* eslint-disable max-len */
-import Wallet from '../lib/Wallet.js';
 import assert from 'node:assert';
 import { hexToBytes } from '@noble/hashes/utils.js';
 import { before, describe, it } from 'node:test';
+
+import Wallet from '../lib/Wallet.js';
 
 describe('Wallet', () => {
   describe('constructor', () => {
