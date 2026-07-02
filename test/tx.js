@@ -6,8 +6,10 @@ import { verifyBulletproofPlus } from '../lib/bulletproofs.js';
 import { verifyClsag } from '../lib/clsag.js';
 import {
   Point,
+  decodePoint,
   derivePublicKey,
   deriveViewTag,
+  encodePoint,
   fastHash,
   generateKeyDerivation,
   generateKeyImage,
@@ -15,7 +17,6 @@ import {
   secretKeyToPublicKey,
 } from '../lib/crypto-util.js';
 import { bytesToHex, hexToBytes, randomBytes } from '@noble/hashes/utils.js';
-import { decodeInt, decodePoint, encodeInt, encodePoint } from '../lib/helpers.js';
 import { decodeRct, pedersenCommitment } from '../lib/ringct.js';
 import { describe, it } from 'node:test';
 import { transaction, txPrefix } from '../lib/raw.js';
@@ -201,7 +202,7 @@ describe('tx', () => {
       return {
         viewSecret,
         spendPublicKey,
-        viewPublicKey: encodePoint(decodePoint(spendPublicKey).multiplyUnsafe(decodeInt(viewSecret))),
+        viewPublicKey: encodePoint(decodePoint(spendPublicKey).multiplyUnsafe(viewSecret)),
         isSubaddress: true,
       };
     };
@@ -240,7 +241,7 @@ describe('tx', () => {
       const r = randomScalar();
       const out = tx.generateOutputs([s], r);
       assert.equal(out.additionalPublicKeys.length, 0);
-      assert.deepStrictEqual(out.txPublicKey, encodePoint(decodePoint(s.spendPublicKey).multiplyUnsafe(decodeInt(r))));
+      assert.deepStrictEqual(out.txPublicKey, encodePoint(decodePoint(s.spendPublicKey).multiplyUnsafe(r)));
       assert.ok(recipientFinds(out, 0, s));
     });
 
@@ -260,7 +261,7 @@ describe('tx', () => {
       const r = randomScalar();
       const out = tx.generateOutputs([s, s], r);
       assert.equal(out.additionalPublicKeys.length, 0);
-      assert.deepStrictEqual(out.txPublicKey, encodePoint(decodePoint(s.spendPublicKey).multiplyUnsafe(decodeInt(r))));
+      assert.deepStrictEqual(out.txPublicKey, encodePoint(decodePoint(s.spendPublicKey).multiplyUnsafe(r)));
       assert.ok(recipientFinds(out, 0, s));
       assert.ok(recipientFinds(out, 1, s));
     });
@@ -282,7 +283,7 @@ describe('tx', () => {
       const secretKey = randomScalar();
       const publicKey = secretKeyToPublicKey(secretKey);
       const mask = randomScalar();
-      const commitment = pedersenCommitment(encodeInt(amount), mask);
+      const commitment = pedersenCommitment(amount, mask);
       const ring = [];
       for (let j = 0; j < ringSize - 1; j++) {
         ring.push({

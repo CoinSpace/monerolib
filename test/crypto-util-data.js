@@ -2,8 +2,7 @@
 import { FpSqrtEven } from '@noble/curves/abstract/modular.js';
 import assert from 'node:assert/strict';
 import { A, H, INV_EIGHT, fffb1, fffb2, fffb3, fffb4, ma, sqrtm1 } from '../lib/crypto-util-data.js';
-import { Fn, Fp, Point, fastHash } from '../lib/crypto-util.js';
-import { decodePoint, encodePoint } from '../lib/helpers.js';
+import { Fn, Fp, Point, decodePoint, encodePoint, fastHash } from '../lib/crypto-util.js';
 import { describe, it } from 'node:test';
 
 // ref10 fe: a field element mod 2^255-19 stored as 10 signed limbs, radix 2^25.5

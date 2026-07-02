@@ -1,6 +1,7 @@
 
 import { RCTTypes } from '../lib/config.js';
 import assert from 'node:assert';
+import { decodeInt } from '../lib/helpers.js';
 import ringct from '../lib/ringct.js';
 import { bytesToHex, hexToBytes } from '@noble/hashes/utils.js';
 import { describe, it } from 'node:test';
@@ -13,7 +14,9 @@ describe('ringct', () => {
       assert.deepStrictEqual(ringct.ecdhEncode({
         amount: hexToBytes('c32eac9cec686d5c9b1397d31ce8f2e5d8ccdba118724ef332da1e9854af9a0a'),
         mask: hexToBytes('0f78b8c44cc7eef45371b2faea30871552f0d74be195720f0ff9395d302a7a05'),
-      }, hexToBytes('e720a09f2e3a0bbf4e4ba7ad93653bb296885510121f806acb2a5f9168fafa01'), RCTTypes.Bulletproof),
+      },
+      decodeInt(hexToBytes('e720a09f2e3a0bbf4e4ba7ad93653bb296885510121f806acb2a5f9168fafa01')),
+      RCTTypes.Bulletproof),
       {
         amount: hexToBytes('ce0ae31063ed7d5f87db7a312b99cadd77786cd366970e3d82e4735a2d65ce05'),
         mask: hexToBytes('b4bb3837a56b6e63eda0706c08754461fb813eac1eba083497dd149f2ddbae0d'),
@@ -23,7 +26,9 @@ describe('ringct', () => {
     it('should work for v2', () => {
       assert.deepStrictEqual(ringct.ecdhEncode({
         amount: hexToBytes('bb477feedbe8a2f8000000000000000000000000000000000000000000000000'),
-      }, hexToBytes('ce0ae31063ed7d5f87db7a312b99cadd77786cd366970e3d82e4735a2d65ce05'), RCTTypes.Bulletproof2),
+      },
+      decodeInt(hexToBytes('ce0ae31063ed7d5f87db7a312b99cadd77786cd366970e3d82e4735a2d65ce05')),
+      RCTTypes.Bulletproof2),
       {
         amount: hexToBytes('e745cf6a1fe5f04a000000000000000000000000000000000000000000000000'),
         mask: new Uint8Array(32),
@@ -37,7 +42,9 @@ describe('ringct', () => {
       assert.deepStrictEqual(ringct.ecdhDecode({
         amount: hexToBytes('ce0ae31063ed7d5f87db7a312b99cadd77786cd366970e3d82e4735a2d65ce05'),
         mask: hexToBytes('b4bb3837a56b6e63eda0706c08754461fb813eac1eba083497dd149f2ddbae0d'),
-      }, hexToBytes('e720a09f2e3a0bbf4e4ba7ad93653bb296885510121f806acb2a5f9168fafa01'), RCTTypes.Bulletproof),
+      },
+      decodeInt(hexToBytes('e720a09f2e3a0bbf4e4ba7ad93653bb296885510121f806acb2a5f9168fafa01')),
+      RCTTypes.Bulletproof),
       {
         amount: hexToBytes('c32eac9cec686d5c9b1397d31ce8f2e5d8ccdba118724ef332da1e9854af9a0a'),
         mask: hexToBytes('0f78b8c44cc7eef45371b2faea30871552f0d74be195720f0ff9395d302a7a05'),
@@ -47,7 +54,9 @@ describe('ringct', () => {
     it('should work for v2', () => {
       assert.deepStrictEqual(ringct.ecdhDecode({
         amount: hexToBytes('e745cf6a1fe5f04a'),
-      }, hexToBytes('ce0ae31063ed7d5f87db7a312b99cadd77786cd366970e3d82e4735a2d65ce05'), RCTTypes.Bulletproof2),
+      },
+      decodeInt(hexToBytes('ce0ae31063ed7d5f87db7a312b99cadd77786cd366970e3d82e4735a2d65ce05')),
+      RCTTypes.Bulletproof2),
       {
         amount: hexToBytes('bb477feedbe8a2f8000000000000000000000000000000000000000000000000'),
         mask: hexToBytes('13eed709380e0f6fe1eb340291a96c56dae4189a07f32c09bd0fe8b94bd4440b'),
@@ -58,8 +67,8 @@ describe('ringct', () => {
   describe('pedersenCommitment', () => {
     it('should work', () => {
       assert.strictEqual(bytesToHex(ringct.pedersenCommitment(
-        hexToBytes('c32eac9cec686d5c9b1397d31ce8f2e5d8ccdba118724ef332da1e9854af9a0a'),
-        hexToBytes('0f78b8c44cc7eef45371b2faea30871552f0d74be195720f0ff9395d302a7a05')
+        decodeInt(hexToBytes('c32eac9cec686d5c9b1397d31ce8f2e5d8ccdba118724ef332da1e9854af9a0a')),
+        decodeInt(hexToBytes('0f78b8c44cc7eef45371b2faea30871552f0d74be195720f0ff9395d302a7a05'))
       )), 'a2b64f8a5f10a19d41c74714b069f6a7e78a782488e02646e3c0fb7b0d91d84b');
     });
   });

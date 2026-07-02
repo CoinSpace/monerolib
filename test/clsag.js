@@ -1,15 +1,15 @@
 import assert from 'node:assert/strict';
+import { encodeInt } from '../lib/helpers.js';
 import { pedersenCommitment } from '../lib/ringct.js';
 import { bytesToHex, hexToBytes, randomBytes } from '@noble/hashes/utils.js';
-import { decodePoint, encodeInt, encodePoint } from '../lib/helpers.js';
+import { decodePoint, encodePoint, generateKeyImage, generateKeys, randomScalar } from '../lib/crypto-util.js';
 import { describe, it } from 'node:test';
-import { generateKeyImage, generateKeys, randomScalar } from '../lib/crypto-util.js';
 import { proveClsag, verifyClsag } from '../lib/clsag.js';
 
 // Build a valid ring with the real input at `index`, balanced (input amount == pseudoOut amount),
 // so that C_nonzero[index] - Cout = z*G with z = inMask - a.
 function setup(n, index) {
-  const amount = encodeInt(123456789n);
+  const amount = 123456789n;
   const real = generateKeys();
   const inMask = randomScalar();
   const a = randomScalar(); // pseudoOut mask
@@ -18,7 +18,7 @@ function setup(n, index) {
     if (i === index) {
       pubs.push({ dest: real.pub, mask: pedersenCommitment(amount, inMask) });
     } else {
-      pubs.push({ dest: generateKeys().pub, mask: pedersenCommitment(encodeInt(1n), randomScalar()) });
+      pubs.push({ dest: generateKeys().pub, mask: pedersenCommitment(1n, randomScalar()) });
     }
   }
   const Cout = pedersenCommitment(amount, a);
@@ -82,7 +82,7 @@ describe('clsag', () => {
 
     it('bad commitment C at creation', () => {
       const { message, pubs, inSk, a, Cout, index } = setup(8, 3);
-      pubs[index] = { dest: pubs[index].dest, mask: pedersenCommitment(encodeInt(1n), randomScalar()) };
+      pubs[index] = { dest: pubs[index].dest, mask: pedersenCommitment(1n, randomScalar()) };
       const sig = proveClsag(message, pubs, inSk, a, Cout, index);
       assert.ok(!verifyClsag(message, sig, pubs, Cout));
     });
@@ -97,13 +97,13 @@ describe('clsag', () => {
     it('wrong pseudoOut commitment', () => {
       const { message, pubs, inSk, a, Cout, index } = setup(8, 3);
       const sig = proveClsag(message, pubs, inSk, a, Cout, index);
-      assert.ok(!verifyClsag(message, sig, pubs, pedersenCommitment(encodeInt(999n), randomScalar())));
+      assert.ok(!verifyClsag(message, sig, pubs, pedersenCommitment(999n, randomScalar())));
     });
 
     it('tampered s scalar', () => {
       const { message, pubs, inSk, a, Cout, index } = setup(8, 3);
       const sig = proveClsag(message, pubs, inSk, a, Cout, index);
-      sig.s[0] = randomScalar();
+      sig.s[0] = encodeInt(randomScalar());
       assert.ok(!verifyClsag(message, sig, pubs, Cout));
     });
 
@@ -111,14 +111,14 @@ describe('clsag', () => {
       const { message, pubs, inSk, a, Cout, index } = setup(8, 3);
       const sig = proveClsag(message, pubs, inSk, a, Cout, index);
       assert.ok(!verifyClsag(message, { ...sig, s: sig.s.slice(0, -1) }, pubs, Cout));
-      assert.ok(!verifyClsag(message, { ...sig, s: [...sig.s, randomScalar()] }, pubs, Cout));
+      assert.ok(!verifyClsag(message, { ...sig, s: [...sig.s, encodeInt(randomScalar())] }, pubs, Cout));
       assert.ok(!verifyClsag(message, { ...sig, s: [] }, pubs, Cout));
     });
 
     it('tampered c1', () => {
       const { message, pubs, inSk, a, Cout, index } = setup(8, 3);
       const sig = proveClsag(message, pubs, inSk, a, Cout, index);
-      assert.ok(!verifyClsag(message, { ...sig, c1: randomScalar() }, pubs, Cout));
+      assert.ok(!verifyClsag(message, { ...sig, c1: encodeInt(randomScalar()) }, pubs, Cout));
     });
 
     it('tampered key image I', () => {

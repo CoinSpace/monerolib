@@ -1,8 +1,8 @@
 import assert from 'node:assert/strict';
 import { transaction } from '../lib/raw.js';
 import txs from './fixtures/txs.json' with { type: 'json' };
-import { CURVE, randomScalar } from '../lib/crypto-util.js';
-import { decodeInt, decodePoint, encodeInt, encodePoint } from '../lib/helpers.js';
+import { CURVE, decodePoint, encodePoint, randomScalar } from '../lib/crypto-util.js';
+import { decodeInt, encodeInt } from '../lib/helpers.js';
 import { describe, it } from 'node:test';
 import { hexToBytes, randomBytes } from '@noble/hashes/utils.js';
 import { proveRangeBulletproofPlus, verifyBulletproof, verifyBulletproofPlus } from '../lib/bulletproofs.js';
@@ -104,7 +104,7 @@ describe('bulletproofs plus', () => {
     it('tampered scalar r1', () => {
       const amounts = [1000n, 2000n];
       const { proof, V } = proveRangeBulletproofPlus(amounts, masksFor(amounts));
-      assert.ok(!verifyBulletproofPlus({ ...proof, r1: randomScalar() }, V));
+      assert.ok(!verifyBulletproofPlus({ ...proof, r1: encodeInt(randomScalar()) }, V));
     });
 
     // monero rejects non-canonical (>= l) proof scalars via is_reduced

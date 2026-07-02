@@ -1,11 +1,11 @@
 /* eslint-disable max-len */
-import { __mockRandomBytes__ } from '../lib/crypto-util.js';
 import assert from 'node:assert';
 import cryptoUtil from '../lib/crypto-util.js';
-import { encodePoint } from '../lib/helpers.js';
 import fs from 'fs/promises';
 import { keccakP } from '@noble/hashes/sha3.js';
+import { Point, __mockRandomBytes__, encodePoint } from '../lib/crypto-util.js';
 import { bytesToHex, hexToBytes } from '@noble/hashes/utils.js';
+import { decodeInt, encodeInt } from '../lib/helpers.js';
 import { describe, it } from 'node:test';
 
 // https://github.com/monero-project/monero/blob/v0.18.5.0/tests/crypto/tests.txt
@@ -32,11 +32,19 @@ describe('crypto-util', () => {
     switch (cmd) {
       case 'check_scalar': {
         const [scalar, expected] = rest;
-        describe('checkScalar', () => {
-          it(`scalar '${scalar}' to be valid '${expected}'`, () => {
-            const actual = cryptoUtil.checkScalar(hexToBytes(scalar));
-            assert.strictEqual(actual, expected === 'true');
-          });
+        describe('decodeScalar', () => {
+          if (expected === 'true') {
+            it(`scalar '${scalar}' to be valid`, () => {
+              const actual = cryptoUtil.decodeScalar(hexToBytes(scalar));
+              assert.strictEqual(bytesToHex(encodeInt(actual)), scalar);
+            });
+          } else {
+            it(`scalar '${scalar}' should throw 'Invalid scalar'`, () => {
+              assert.throws(() => {
+                cryptoUtil.decodeScalar(hexToBytes(scalar));
+              }, { message: 'Invalid scalar' });
+            });
+          }
         });
         break;
       }
@@ -45,7 +53,7 @@ describe('crypto-util', () => {
         describe('randomScalar', () => {
           it(`scalar must be '${expected}'`, () => {
             const actual = cryptoUtil.randomScalar();
-            assert.strictEqual(bytesToHex(actual), expected);
+            assert.strictEqual(bytesToHex(encodeInt(actual)), expected);
           });
         });
         break;
@@ -55,7 +63,7 @@ describe('crypto-util', () => {
         describe('hashToScalar', () => {
           it(`hash '${data}' to be converted to scalar '${expected}'`, () => {
             const actual = cryptoUtil.hashToScalar(data === 'x' ? new Uint8Array(0) : hexToBytes(data));
-            assert.strictEqual(bytesToHex(actual), expected);
+            assert.strictEqual(bytesToHex(encodeInt(actual)), expected);
           });
         });
         break;
@@ -66,18 +74,26 @@ describe('crypto-util', () => {
           it(`should generate pub '${expectedPub}' sec '${expectedSec}'`, () => {
             const { pub, sec } = cryptoUtil.generateKeys();
             assert.strictEqual(bytesToHex(pub), expectedPub);
-            assert.strictEqual(bytesToHex(sec), expectedSec);
+            assert.strictEqual(bytesToHex(encodeInt(sec)), expectedSec);
           });
         });
         break;
       }
       case 'check_key': {
-        const [data, expected] = rest;
-        describe('checkKey', () => {
-          it(`pub '${data}' to be valid '${expected}'`, () => {
-            const actual = cryptoUtil.checkKey(hexToBytes(data));
-            assert.strictEqual(actual, expected === 'true');
-          });
+        const [point, expected] = rest;
+        describe('decodePoint', () => {
+          if (expected === 'true') {
+            it(`point '${point}' to be valid`, () => {
+              const actual = cryptoUtil.decodePoint(hexToBytes(point));
+              assert.ok(actual instanceof Point);
+            });
+          } else {
+            it(`point '${point}' should throw 'Invalid point'`, () => {
+              assert.throws(() => {
+                cryptoUtil.decodePoint(hexToBytes(point));
+              }, { message: 'Invalid point' });
+            });
+          }
         });
         break;
       }
@@ -86,13 +102,13 @@ describe('crypto-util', () => {
         describe('secretKeyToPublicKey', () => {
           if (success === 'true') {
             it(`sec '${sec}' to be converted to pub '${expected}'`, () => {
-              const actual = cryptoUtil.secretKeyToPublicKey(hexToBytes(sec));
+              const actual = cryptoUtil.secretKeyToPublicKey(decodeInt(hexToBytes(sec)));
               assert.strictEqual(bytesToHex(actual), expected);
             });
           } else {
             it(`sec '${sec}' should throw 'Invalid secret key'`, () => {
               assert.throws(() => {
-                cryptoUtil.secretKeyToPublicKey(hexToBytes(sec));
+                cryptoUtil.secretKeyToPublicKey(decodeInt(hexToBytes(sec)));
               }, { message: 'Invalid secret key' });
             });
           }
@@ -104,13 +120,13 @@ describe('crypto-util', () => {
         describe('generateKeyDerivation', () => {
           if (success === 'true') {
             it(`pub '${pub}' sec '${sec}' to be derived '${expected}'`, () => {
-              const actual = cryptoUtil.generateKeyDerivation(hexToBytes(pub), hexToBytes(sec));
+              const actual = cryptoUtil.generateKeyDerivation(hexToBytes(pub), decodeInt(hexToBytes(sec)));
               assert.strictEqual(bytesToHex(actual), expected);
             });
           } else {
             it(`pub '${pub}' sec '${sec}' should throw 'Invalid public key'`, () => {
               assert.throws(() => {
-                cryptoUtil.generateKeyDerivation(hexToBytes(pub), hexToBytes(sec));
+                cryptoUtil.generateKeyDerivation(hexToBytes(pub), decodeInt(hexToBytes(sec)));
               }, { message: 'Invalid public key' });
             });
           }
@@ -139,8 +155,8 @@ describe('crypto-util', () => {
         const [derivation, index, base, expected] = rest;
         describe('deriveSecretKey', () => {
           it(`derivation '${derivation}' index '${index}' base: '${base}' to be derived '${expected}'`, () => {
-            const actual = cryptoUtil.deriveSecretKey(hexToBytes(derivation), parseInt(index), hexToBytes(base));
-            assert.strictEqual(bytesToHex(actual), expected);
+            const actual = cryptoUtil.deriveSecretKey(hexToBytes(derivation), parseInt(index), decodeInt(hexToBytes(base)));
+            assert.strictEqual(bytesToHex(encodeInt(actual)), expected);
           });
         });
         break;
@@ -159,7 +175,7 @@ describe('crypto-util', () => {
         const [prefix, pub, sec, expected] = rest;
         describe('generateSignature', () => {
           it(`prefix '${prefix}' pub '${pub}' sec: '${sec}' to be signature '${expected}'`, () => {
-            const actual = cryptoUtil.generateSignature(hexToBytes(prefix), hexToBytes(pub), hexToBytes(sec));
+            const actual = cryptoUtil.generateSignature(hexToBytes(prefix), hexToBytes(pub), decodeInt(hexToBytes(sec)));
             assert.strictEqual(bytesToHex(actual), expected);
           });
         });
@@ -199,7 +215,7 @@ describe('crypto-util', () => {
         const [pub, sec, expected] = rest;
         describe('generateKeyImage', () => {
           it(`pub '${pub}' sec: '${sec}' to be key image '${expected}'`, () => {
-            const actual = cryptoUtil.generateKeyImage(hexToBytes(pub), hexToBytes(sec));
+            const actual = cryptoUtil.generateKeyImage(hexToBytes(pub), decodeInt(hexToBytes(sec)));
             assert.strictEqual(bytesToHex(actual), expected);
           });
         });
@@ -215,7 +231,7 @@ describe('crypto-util', () => {
               hexToBytes(prefix),
               hexToBytes(image),
               pubs.map(hexToBytes),
-              hexToBytes(sec),
+              decodeInt(hexToBytes(sec)),
               parseInt(index)
             );
             assert.strictEqual(bytesToHex(actual), expected);
