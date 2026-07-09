@@ -261,4 +261,80 @@ describe('crypto', () => {
       }
     }
   }
+
+  // subaddress key derivation is not covered by monero's tests.txt; the (1,1) expected values are
+  // cross-checked against the monero-verified subaddress address strings in test/wallet.js
+  describe('subaddress', () => {
+    const a = helpers.decodeInt(hexToBytes('99c57d1f0f997bc8ca98559a0ccc3fada3899756e63d1516dba58b7e468cfc05'));
+    const b = helpers.decodeInt(hexToBytes('8d8c8eeca38ac3b46aa293fd519b3860e96b5f873c12a95e3e1cdeda0bac4903'));
+    const B = hexToBytes('f8631661f6ab4e6fda310c797330d86e23a682f20d5bc8cc27b18051191f16d7');
+    const A = hexToBytes('4a1535063ad1fee2dabbf909d4fd9a873e29541b401f0944754e17c9a41820ce');
+    const D = '4a3e863f2a7a43f7fbaa0320e06982009f2986dd04173eaee32aa8473317f19d';
+    const C = 'd247f90799916273407c1c71230d5ae0a9c71b8a7492da035e5e8ad972eea18b';
+
+    describe('subaddressSecret', () => {
+      it('m = Hs("SubAddr" || a || i || j) for account 1 index 1', () => {
+        const m = crypto.subaddressSecret(a, { major: 1, minor: 1 });
+        assert.strictEqual(bytesToHex(helpers.encodeInt(m)), '81dea0953b33dcaed5097a7c2b94cf5e94a5d8fa9796631331ed656da187ea01');
+      });
+      it('throws for the main account (0, 0)', () => {
+        assert.throws(() => crypto.subaddressSecret(a, { major: 0, minor: 0 }));
+      });
+    });
+
+    describe('subaddressPublicSpendKey', () => {
+      it('D = B + m*G for account 1 index 1', () => {
+        assert.strictEqual(bytesToHex(crypto.subaddressPublicSpendKey(a, B, { major: 1, minor: 1 })), D);
+      });
+      it('returns B for the main account (0, 0)', () => {
+        assert.deepStrictEqual(crypto.subaddressPublicSpendKey(a, B, { major: 0, minor: 0 }), B);
+      });
+    });
+
+    describe('subaddressSecretSpendKey', () => {
+      it('d = b + m, and d*G == D for account 1 index 1', () => {
+        const d = crypto.subaddressSecretSpendKey(a, b, { major: 1, minor: 1 });
+        assert.strictEqual(bytesToHex(crypto.secretKeyToPublicKey(d)), D);
+      });
+      it('returns b for the main account (0, 0)', () => {
+        assert.strictEqual(crypto.subaddressSecretSpendKey(a, b, { major: 0, minor: 0 }), b);
+      });
+    });
+
+    describe('subaddressPublicKeys', () => {
+      it('{ D, C = a*D } for account 1 index 1', () => {
+        const keys = crypto.subaddressPublicKeys(a, B, { major: 1, minor: 1 });
+        assert.strictEqual(bytesToHex(keys.publicSpendKey), D);
+        assert.strictEqual(bytesToHex(keys.publicViewKey), C);
+      });
+      it('{ B, A = a*G } for the main account (0, 0)', () => {
+        const keys = crypto.subaddressPublicKeys(a, B, { major: 0, minor: 0 });
+        assert.deepStrictEqual(keys.publicSpendKey, B);
+        assert.deepStrictEqual(keys.publicViewKey, A);
+      });
+    });
+
+    describe('deriveSubaddressPublicKey', () => {
+      it('recovers the base spend key: (base + Hs*G) - Hs*G == base', () => {
+        const derivation = crypto.generateKeyDerivation(B, a);
+        const outputKey = crypto.derivePublicKey(derivation, 0, B);
+        assert.deepStrictEqual(crypto.deriveSubaddressPublicKey(outputKey, derivation, 0), B);
+      });
+    });
+
+    describe('outputKeyImage', () => {
+      it('main account (0, 0): secret*G is the one-time key and keyImage matches', () => {
+        const derivation = crypto.generateKeyDerivation(B, a);
+        const { secret, keyImage } = crypto.outputKeyImage(a, b, derivation, 0, { major: 0, minor: 0 });
+        const oneTimeKey = crypto.derivePublicKey(derivation, 0, B);
+        assert.deepStrictEqual(crypto.secretKeyToPublicKey(secret), oneTimeKey);
+        assert.deepStrictEqual(keyImage, crypto.generateKeyImage(oneTimeKey, secret));
+      });
+      it('subaddress (1, 1): secret*G is the one-time key derived over D', () => {
+        const derivation = crypto.generateKeyDerivation(B, a);
+        const { secret } = crypto.outputKeyImage(a, b, derivation, 0, { major: 1, minor: 1 });
+        assert.deepStrictEqual(crypto.secretKeyToPublicKey(secret), crypto.derivePublicKey(derivation, 0, hexToBytes(D)));
+      });
+    });
+  });
 });

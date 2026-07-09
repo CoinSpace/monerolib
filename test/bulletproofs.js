@@ -8,10 +8,10 @@ import * as helpers from '../lib/helpers.js';
 import * as raw from '../lib/raw.js';
 import txs from './fixtures/txs.json' with { type: 'json' };
 
-const masksFor = (amounts) => amounts.map(() => crypto.randomScalar());
+const proofOutputs = (amounts) => amounts.map((amount) => ({ amount, mask: crypto.randomScalar() }));
 
-// low-order points, verbatim from the monero unit test
 // https://github.com/monero-project/monero/blob/v0.18.5.0/tests/unit_tests/bulletproofs_plus.cpp#L115-L124
+// https://github.com/monero-project/monero/blob/v0.18.5.0/tests/unit_tests/bulletproofs.cpp#L183-L192
 const TORSION_ELEMENTS = [
   'c7176a703d4dd84fba3c0b760d10670f2a2053fa2c39ccc64ec7fd7792ac03fa',
   '0000000000000000000000000000000000000000000000000000000000000000',
@@ -22,7 +22,6 @@ const TORSION_ELEMENTS = [
   'c7176a703d4dd84fba3c0b760d10670f2a2053fa2c39ccc64ec7fd7792ac037a',
 ];
 
-// fixed original-Bulletproof vector generated from monero, ported verbatim
 // https://github.com/monero-oxide/monero-oxide/blob/946ec5f00ff071b129758ee8cba5528539fccfe4/monero-oxide/ringct/bulletproofs/src/tests/original/mod.rs#L13-L111
 const ORIGINAL_BP_PROOF = {
   A: hexToBytes('ef32c0b9551b804decdcb107eb22aa715b7ce259bf3c5cac20e24dfa6b28ac71'),
@@ -59,29 +58,29 @@ const ORIGINAL_BP_V = [
   '2829cbd025aa54cd6e1b59a032564f22f0b2e5627f7f2c4297f90da438b5510f',
 ].map((h) => crypto.encodePoint(crypto.decodePoint(hexToBytes(h)).clearCofactor()));
 
-// mirrors monero tests/unit_tests/bulletproofs_plus.cpp
 // https://github.com/monero-project/monero/blob/v0.18.5.0/tests/unit_tests/bulletproofs_plus.cpp
 describe('bulletproofs plus', () => {
   describe('prove + verify round-trip', () => {
-    for (const n of [1, 2, 16]) {
+    // https://github.com/monero-oxide/monero-oxide/blob/946ec5f00ff071b129758ee8cba5528539fccfe4/monero-oxide/ringct/bulletproofs/src/tests/plus/aggregate_range_proof.rs#L9-L25
+    for (let n = 1; n <= 16; n++) {
       it(`${n} output(s)`, () => {
         const amounts = Array.from({ length: n }, (_, i) => BigInt(1000 * (i + 1)));
-        const { proof, V } = bulletproofs.proveRangeBulletproofPlus(amounts, masksFor(amounts));
+        const { proof, V } = bulletproofs.proveRangeBulletproofPlus(proofOutputs(amounts));
         assert.equal(V.length, n);
-        assert.ok(bulletproofs.verifyBulletproofPlus(proof, V));
+        assert.ok(bulletproofs.verifyBulletproofPlus(V, proof));
       });
     }
   });
 
   it('valid for amount 0', () => {
-    const { proof, V } = bulletproofs.proveRangeBulletproofPlus([0n], masksFor([0n]));
-    assert.ok(bulletproofs.verifyBulletproofPlus(proof, V));
+    const { proof, V } = bulletproofs.proveRangeBulletproofPlus(proofOutputs([0n]));
+    assert.ok(bulletproofs.verifyBulletproofPlus(V, proof));
   });
 
   it('valid for max uint64 amount', () => {
     const max = [2n ** 64n - 1n];
-    const { proof, V } = bulletproofs.proveRangeBulletproofPlus(max, masksFor(max));
-    assert.ok(bulletproofs.verifyBulletproofPlus(proof, V));
+    const { proof, V } = bulletproofs.proveRangeBulletproofPlus(proofOutputs(max));
+    assert.ok(bulletproofs.verifyBulletproofPlus(V, proof));
   });
 
   describe('rejects invalid proofs', () => {
@@ -90,65 +89,65 @@ describe('bulletproofs plus', () => {
     // https://github.com/monero-project/monero/blob/v0.18.5.0/tests/unit_tests/bulletproofs_plus.cpp#L99-L113
     for (const amount of [2n ** 64n, 2n ** 248n]) {
       it(`rejects out-of-range amount 2^${amount === 2n ** 64n ? 64 : 248}`, () => {
-        const { proof, V } = bulletproofs.proveRangeBulletproofPlus([amount], masksFor([amount]));
-        assert.ok(!bulletproofs.verifyBulletproofPlus(proof, V));
+        const { proof, V } = bulletproofs.proveRangeBulletproofPlus(proofOutputs([amount]));
+        assert.ok(!bulletproofs.verifyBulletproofPlus(V, proof));
       });
     }
 
     // bulletproofs_plus_max: proving for more than MAX_COMMITMENTS outputs must throw
     // https://github.com/monero-oxide/monero-oxide/blob/946ec5f00ff071b129758ee8cba5528539fccfe4/monero-oxide/ringct/bulletproofs/src/tests/mod.rs#L37-L53
     it('rejects too many commitments (> 16)', () => {
-      const amounts = Array.from({ length: 17 }, () => 0n);
-      assert.throws(() => bulletproofs.proveRangeBulletproofPlus(amounts, masksFor(amounts)));
+      const outputs = Array.from({ length: 17 }, () => ({ amount: 0n, mask: crypto.randomScalar() }));
+      assert.throws(() => bulletproofs.proveRangeBulletproofPlus(outputs));
     });
 
     it('tampered scalar r1', () => {
       const amounts = [1000n, 2000n];
-      const { proof, V } = bulletproofs.proveRangeBulletproofPlus(amounts, masksFor(amounts));
-      assert.ok(!bulletproofs.verifyBulletproofPlus({ ...proof, r1: helpers.encodeInt(crypto.randomScalar()) }, V));
+      const { proof, V } = bulletproofs.proveRangeBulletproofPlus(proofOutputs(amounts));
+      assert.ok(!bulletproofs.verifyBulletproofPlus(V, { ...proof, r1: helpers.encodeInt(crypto.randomScalar()) }));
     });
 
     // monero rejects non-canonical (>= l) proof scalars via is_reduced
     // https://github.com/monero-project/monero/blob/v0.18.5.0/src/ringct/bulletproofs_plus.cc#L824-L827
     it('rejects non-canonical proof scalars', () => {
       const amounts = [1000n, 2000n];
-      const { proof, V } = bulletproofs.proveRangeBulletproofPlus(amounts, masksFor(amounts));
+      const { proof, V } = bulletproofs.proveRangeBulletproofPlus(proofOutputs(amounts));
       for (const field of ['r1', 's1', 'd1']) {
         const bad = { ...proof, [field]: helpers.encodeInt(helpers.decodeInt(proof[field]) + crypto.CURVE.n) };
-        assert.ok(!bulletproofs.verifyBulletproofPlus(bad, V));
+        assert.ok(!bulletproofs.verifyBulletproofPlus(V, bad));
       }
     });
 
     it('tampered point A', () => {
       const amounts = [1000n, 2000n];
-      const { proof, V } = bulletproofs.proveRangeBulletproofPlus(amounts, masksFor(amounts));
-      assert.ok(!bulletproofs.verifyBulletproofPlus({ ...proof, A: randomBytes(32) }, V));
+      const { proof, V } = bulletproofs.proveRangeBulletproofPlus(proofOutputs(amounts));
+      assert.ok(!bulletproofs.verifyBulletproofPlus(V, { ...proof, A: randomBytes(32) }));
     });
 
     it('wrong commitments', () => {
       const amounts = [1000n, 2000n];
-      const { proof, V } = bulletproofs.proveRangeBulletproofPlus(amounts, masksFor(amounts));
-      assert.ok(!bulletproofs.verifyBulletproofPlus(proof, [V[0], V[0]]));
+      const { proof, V } = bulletproofs.proveRangeBulletproofPlus(proofOutputs(amounts));
+      assert.ok(!bulletproofs.verifyBulletproofPlus([V[0], V[0]], proof));
     });
 
     // invalid_torsion: adding any low-order point to V, L, R, A, A1 or B must break verification
     // https://github.com/monero-project/monero/blob/v0.18.5.0/tests/unit_tests/bulletproofs_plus.cpp#L115-L169
     it('rejects torsioned points', () => {
       const amounts = [1000n, 2000n];
-      const { proof, V } = bulletproofs.proveRangeBulletproofPlus(amounts, masksFor(amounts));
-      assert.ok(bulletproofs.verifyBulletproofPlus(proof, V));
+      const { proof, V } = bulletproofs.proveRangeBulletproofPlus(proofOutputs(amounts));
+      assert.ok(bulletproofs.verifyBulletproofPlus(V, proof));
       for (const xs of TORSION_ELEMENTS) {
         const addT = (b) => crypto.encodePoint(
           crypto.decodePoint(b).add(crypto.decodePoint(hexToBytes(xs)))
         );
         for (const field of ['A', 'A1', 'B']) {
-          assert.ok(!bulletproofs.verifyBulletproofPlus({ ...proof, [field]: addT(proof[field]) }, V));
+          assert.ok(!bulletproofs.verifyBulletproofPlus(V, { ...proof, [field]: addT(proof[field]) }));
         }
         for (const field of ['L', 'R']) {
           const arr = proof[field].map((b, i) => (i === 0 ? addT(b) : b));
-          assert.ok(!bulletproofs.verifyBulletproofPlus({ ...proof, [field]: arr }, V));
+          assert.ok(!bulletproofs.verifyBulletproofPlus(V, { ...proof, [field]: arr }));
         }
-        assert.ok(!bulletproofs.verifyBulletproofPlus(proof, [addT(V[0]), V[1]]));
+        assert.ok(!bulletproofs.verifyBulletproofPlus([addT(V[0]), V[1]], proof));
       }
     });
 
@@ -158,35 +157,35 @@ describe('bulletproofs plus', () => {
       const tx = raw.transaction.decode(hexToBytes(item.hex));
       const proof = tx.rctSigPrunable.bulletproofs[0];
       const { outPk } = tx.rctSigBase;
-      assert.ok(bulletproofs.verifyBulletproof(proof, outPk));
+      assert.ok(bulletproofs.verifyBulletproof(outPk, proof));
       const bad = { ...proof, taux: helpers.encodeInt(helpers.decodeInt(proof.taux) + crypto.CURVE.n) };
-      assert.ok(!bulletproofs.verifyBulletproof(bad, outPk));
+      assert.ok(!bulletproofs.verifyBulletproof(outPk, bad));
     });
   });
 
   it('verifies the fixed original Bulletproof vector', () => {
-    assert.ok(bulletproofs.verifyBulletproof(ORIGINAL_BP_PROOF, ORIGINAL_BP_V));
+    assert.ok(bulletproofs.verifyBulletproof(ORIGINAL_BP_V, ORIGINAL_BP_PROOF));
   });
 
   // invalid_torsion for original Bulletproofs: torsion in V, L, R, A, S, T1 or T2 must be rejected
   // https://github.com/monero-project/monero/blob/v0.18.5.0/tests/unit_tests/bulletproofs.cpp#L194-L234
   it('rejects torsioned points in an original Bulletproof', () => {
-    assert.ok(bulletproofs.verifyBulletproof(ORIGINAL_BP_PROOF, ORIGINAL_BP_V));
+    assert.ok(bulletproofs.verifyBulletproof(ORIGINAL_BP_V, ORIGINAL_BP_PROOF));
     for (const xs of TORSION_ELEMENTS) {
       const addT = (b) => crypto.encodePoint(
         crypto.decodePoint(b).add(crypto.decodePoint(hexToBytes(xs)))
       );
       for (const field of ['A', 'S', 'T1', 'T2']) {
         assert.ok(!bulletproofs.verifyBulletproof(
-          { ...ORIGINAL_BP_PROOF, [field]: addT(ORIGINAL_BP_PROOF[field]) },
-          ORIGINAL_BP_V
+          ORIGINAL_BP_V,
+          { ...ORIGINAL_BP_PROOF, [field]: addT(ORIGINAL_BP_PROOF[field]) }
         ));
       }
       for (const field of ['L', 'R']) {
         const arr = ORIGINAL_BP_PROOF[field].map((b, i) => (i === 0 ? addT(b) : b));
-        assert.ok(!bulletproofs.verifyBulletproof({ ...ORIGINAL_BP_PROOF, [field]: arr }, ORIGINAL_BP_V));
+        assert.ok(!bulletproofs.verifyBulletproof(ORIGINAL_BP_V, { ...ORIGINAL_BP_PROOF, [field]: arr }));
       }
-      assert.ok(!bulletproofs.verifyBulletproof(ORIGINAL_BP_PROOF, [addT(ORIGINAL_BP_V[0]), ORIGINAL_BP_V[1]]));
+      assert.ok(!bulletproofs.verifyBulletproof([addT(ORIGINAL_BP_V[0]), ORIGINAL_BP_V[1]], ORIGINAL_BP_PROOF));
     }
   });
 
@@ -197,11 +196,11 @@ describe('bulletproofs plus', () => {
       const { type, outPk } = tx.rctSigBase;
       if (type === 3 || type === 4) { // Bulletproof / Bulletproof2
         it(item.label, () => {
-          assert.ok(bulletproofs.verifyBulletproof(tx.rctSigPrunable.bulletproofs[0], outPk));
+          assert.ok(bulletproofs.verifyBulletproof(outPk, tx.rctSigPrunable.bulletproofs[0]));
         });
       } else if (type === 6) { // BulletproofPlus
         it(item.label, () => {
-          assert.ok(bulletproofs.verifyBulletproofPlus(tx.rctSigPrunable.bulletproofsPlus[0], outPk));
+          assert.ok(bulletproofs.verifyBulletproofPlus(outPk, tx.rctSigPrunable.bulletproofsPlus[0]));
         });
       }
     }

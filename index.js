@@ -1,6 +1,7 @@
 export * as crypto from './lib/crypto.js';
+export * as decoys from './lib/decoys.js';
 export * as helpers from './lib/helpers.js';
 export * as ringct from './lib/ringct.js';
 export * as tx from './lib/tx.js';
-export { default as Address } from './lib/Address.js';
-export { default as Wallet } from './lib/Wallet.js';
+export * as wallet from './lib/wallet.js';
+export { address } from './lib/address.js';

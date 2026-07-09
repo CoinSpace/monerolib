@@ -4,8 +4,13 @@ import { bytesToHex, hexToBytes } from '@noble/hashes/utils.js';
 import { describe, it } from 'node:test';
 
 import * as config from '../lib/config.js';
+import * as crypto from '../lib/crypto.js';
 import * as helpers from '../lib/helpers.js';
+import * as raw from '../lib/raw.js';
 import * as ringct from '../lib/ringct.js';
+import * as tx from '../lib/tx.js';
+// https://github.com/monero-oxide/monero-oxide/blob/946ec5f00ff071b129758ee8cba5528539fccfe4/monero-oxide/wallet/src/tests/scan.rs#L17-L167
+import longAmountFixture from './fixtures/ringct_long_encrypted_amount.json' with { type: 'json' };
 
 describe('ringct', () => {
 
@@ -35,6 +40,13 @@ describe('ringct', () => {
         mask: new Uint8Array(32),
       });
     });
+
+    it('rejects an unknown rct type', () => {
+      assert.throws(
+        () => ringct.ecdhEncode({ amount: new Uint8Array(32) }, 1n, 255),
+        /unknown rct type/
+      );
+    });
   });
 
   describe('ecdhDecode', () => {
@@ -63,6 +75,13 @@ describe('ringct', () => {
         mask: hexToBytes('13eed709380e0f6fe1eb340291a96c56dae4189a07f32c09bd0fe8b94bd4440b'),
       });
     });
+
+    it('rejects an unknown rct type', () => {
+      assert.throws(
+        () => ringct.ecdhDecode({ amount: new Uint8Array(8) }, 1n, 255),
+        /unknown rct type/
+      );
+    });
   });
 
   describe('pedersenCommitment', () => {
@@ -85,7 +104,7 @@ describe('ringct', () => {
       );
       assert.deepStrictEqual(result, {
         mask: hexToBytes('29888c690b7a9f99e5294d1494b684e38a1747d586c51c130b2933dcfdb7cc08'),
-        amount: '1000000000000',
+        amount: 1000000000000n,
       });
       const result2 = ringct.decodeRct(
         { amount: hexToBytes('6d5b3047f314a32e') },
@@ -96,8 +115,57 @@ describe('ringct', () => {
       );
       assert.deepStrictEqual(result2, {
         mask: hexToBytes('6c75a44d7c8b34603c5bd80dfce4b3bb4c8bab190c0470374111c50d2f576f09'),
-        amount: '69365204653916',
+        amount: 69365204653916n,
       });
+    });
+
+    // pruned tx + expected decoded outputs derived from:
+    // https://github.com/monero-oxide/monero-oxide/blob/946ec5f00ff071b129758ee8cba5528539fccfe4/monero-oxide/wallet/src/tests/scan.rs#L17-L167
+    it('decodes a real long-amount tx', () => {
+      const bytes = hexToBytes(longAmountFixture.hex);
+      const prefix = raw.txPrefix.decode(bytes, { allowUnreadBytes: true });
+      const prefixBytes = raw.txPrefix.encode(prefix);
+      const rctSigBase = raw.rctBase(prefix.vin.length, prefix.vout.length)
+        .decode(bytes.subarray(prefixBytes.length), { allowUnreadBytes: true });
+      const { txPublicKey } = tx.parseTxExtra(prefix.extra);
+      const derivation = crypto.generateKeyDerivation(
+        txPublicKey,
+        helpers.decodeInt(hexToBytes(longAmountFixture.secretViewKey))
+      );
+
+      for (const output of longAmountFixture.outputs) {
+        const ecdh = ringct.decodeRct(
+          rctSigBase.ecdhInfo[output.index],
+          rctSigBase.outPk[output.index],
+          rctSigBase.type,
+          output.index,
+          derivation
+        );
+        assert.deepStrictEqual(ecdh, {
+          mask: hexToBytes(output.mask),
+          amount: BigInt(output.amount),
+        });
+      }
+    });
+
+    it('rejects a mismatched commitment', () => {
+      assert.throws(() => ringct.decodeRct(
+        { amount: hexToBytes('e745cf6a1fe5f04a') },
+        hexToBytes('b3330c0eeccd033e4f417f858b63dada88a629148ba2bc26d214f1d29b89353b'),
+        config.RCTTypes.CLSAG,
+        0,
+        hexToBytes('c21ac180b9702ffb85930724a28698ebf2a196bcc8ee205b159c5755f3b32a69')
+      ), /mismatched commitments/);
+    });
+
+    it('rejects an unknown rct type', () => {
+      assert.throws(() => ringct.decodeRct(
+        { amount: new Uint8Array(8) },
+        new Uint8Array(32),
+        255,
+        0,
+        new Uint8Array(32)
+      ), /unknown rct type/);
     });
   });
 
