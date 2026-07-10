@@ -1,6 +1,8 @@
 /* eslint-disable max-len */
 import assert from 'node:assert';
-import { bytesToHex, hexToBytes, randomBytes } from '@noble/hashes/utils.js';
+import {
+  bytesToHex, hexToBytes, randomBytes,
+} from '@noble/hashes/utils.js';
 import { describe, it } from 'node:test';
 
 import * as bulletproofs from '../lib/bulletproofs.js';
@@ -19,7 +21,11 @@ describe('tx', () => {
     const NIL = new Uint8Array(0);
     const NIL_TX_PUB_KEY = new Uint8Array(32);
     const TX_EXTRA_PADDING_MAX_COUNT = 255;
-    const empty = { txPublicKey: NIL_TX_PUB_KEY, encryptedPaymentId: NIL, additionalPublicKeys: [] };
+    const empty = {
+      txPublicKey: NIL_TX_PUB_KEY,
+      encryptedPaymentId: NIL,
+      additionalPublicKeys: [],
+    };
 
     it('should handle empty extra', () => {
       const result = tx.parseTxExtra(Uint8Array.from([]));
@@ -59,7 +65,9 @@ describe('tx', () => {
 
     it('should handle pub key only', () => {
       const result = tx.parseTxExtra(Uint8Array.from([1, 30, 208, 98, 162, 133, 64, 85, 83, 112, 91, 188, 89, 211, 24, 131, 39, 154, 22, 228, 80, 63, 198, 141, 173, 111, 244, 183, 4, 149, 186, 140, 230]));
-      assert.deepStrictEqual(result, { txPublicKey: hexToBytes('1ed062a285405553705bbc59d31883279a16e4503fc68dad6ff4b70495ba8ce6'), encryptedPaymentId: NIL, additionalPublicKeys: [] });
+      assert.deepStrictEqual(result, {
+        txPublicKey: hexToBytes('1ed062a285405553705bbc59d31883279a16e4503fc68dad6ff4b70495ba8ce6'), encryptedPaymentId: NIL, additionalPublicKeys: [],
+      });
     });
 
     it('should handle extra nonce only', () => {
@@ -72,7 +80,9 @@ describe('tx', () => {
         80, 63, 198, 141, 173, 111, 244, 183, 4, 149, 186, 140, 230, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
         0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
         0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]));
-      assert.deepStrictEqual(result, { txPublicKey: hexToBytes('1ed062a285405553705bbc59d31883279a16e4503fc68dad6ff4b70495ba8ce6'), encryptedPaymentId: NIL, additionalPublicKeys: [] });
+      assert.deepStrictEqual(result, {
+        txPublicKey: hexToBytes('1ed062a285405553705bbc59d31883279a16e4503fc68dad6ff4b70495ba8ce6'), encryptedPaymentId: NIL, additionalPublicKeys: [],
+      });
     });
 
     it('should handle two pub keys', () => {
@@ -80,7 +90,9 @@ describe('tx', () => {
         80, 63, 198, 141, 173, 111, 244, 183, 4, 149, 186, 140, 230,
         1, 30, 208, 98, 162, 133, 64, 85, 83, 112, 91, 188, 89, 211, 24, 131, 39, 154, 22, 228,
         80, 63, 198, 141, 173, 111, 244, 183, 4, 149, 186, 140, 230]));
-      assert.deepStrictEqual(result, { txPublicKey: hexToBytes('1ed062a285405553705bbc59d31883279a16e4503fc68dad6ff4b70495ba8ce6'), encryptedPaymentId: NIL, additionalPublicKeys: [] });
+      assert.deepStrictEqual(result, {
+        txPublicKey: hexToBytes('1ed062a285405553705bbc59d31883279a16e4503fc68dad6ff4b70495ba8ce6'), encryptedPaymentId: NIL, additionalPublicKeys: [],
+      });
     });
 
     it('should keep the first txPublicKey even if it is all zeroes', () => {
@@ -88,7 +100,9 @@ describe('tx', () => {
         1, ...new Uint8Array(32),
         1, ...new Uint8Array(32).fill(1),
       ]));
-      assert.deepStrictEqual(result, { txPublicKey: NIL_TX_PUB_KEY, encryptedPaymentId: NIL, additionalPublicKeys: [] });
+      assert.deepStrictEqual(result, {
+        txPublicKey: NIL_TX_PUB_KEY, encryptedPaymentId: NIL, additionalPublicKeys: [],
+      });
     });
 
     it('should not read a payment id from a non-strict nonce', () => {
@@ -111,14 +125,18 @@ describe('tx', () => {
       const result = tx.parseTxExtra(Uint8Array.from([1, 30, 208, 98, 162, 133, 64, 85, 83, 112, 91, 188, 89, 211, 24, 131, 39, 154, 22, 228,
         80, 63, 198, 141, 173, 111, 244, 183, 4, 149, 186, 140, 230,
         2, 9, 1, 0, 0, 0, 0, 0, 0, 0, 0]));
-      assert.deepStrictEqual(result, { txPublicKey: hexToBytes('1ed062a285405553705bbc59d31883279a16e4503fc68dad6ff4b70495ba8ce6'), encryptedPaymentId: hexToBytes('0000000000000000'), additionalPublicKeys: [] });
+      assert.deepStrictEqual(result, {
+        txPublicKey: hexToBytes('1ed062a285405553705bbc59d31883279a16e4503fc68dad6ff4b70495ba8ce6'), encryptedPaymentId: hexToBytes('0000000000000000'), additionalPublicKeys: [],
+      });
     });
 
     it('should handle pub key with encrypted payment id (reverse order)', () => {
       const result = tx.parseTxExtra(Uint8Array.from([2, 9, 1, 0, 0, 0, 0, 0, 0, 0, 0,
         1, 30, 208, 98, 162, 133, 64, 85, 83, 112, 91, 188, 89, 211, 24, 131, 39, 154, 22, 228,
         80, 63, 198, 141, 173, 111, 244, 183, 4, 149, 186, 140, 230]));
-      assert.deepStrictEqual(result, { txPublicKey: hexToBytes('1ed062a285405553705bbc59d31883279a16e4503fc68dad6ff4b70495ba8ce6'), encryptedPaymentId: hexToBytes('0000000000000000'), additionalPublicKeys: [] });
+      assert.deepStrictEqual(result, {
+        txPublicKey: hexToBytes('1ed062a285405553705bbc59d31883279a16e4503fc68dad6ff4b70495ba8ce6'), encryptedPaymentId: hexToBytes('0000000000000000'), additionalPublicKeys: [],
+      });
     });
 
     it('should additional pub keys', () => {
@@ -143,7 +161,9 @@ describe('tx', () => {
       const txPublicKey = crypto.secretKeyToPublicKey(crypto.randomScalar());
       const additionalPublicKeys = [crypto.secretKeyToPublicKey(crypto.randomScalar()), crypto.secretKeyToPublicKey(crypto.randomScalar())];
       const encryptedPaymentId = randomBytes(8);
-      const parsed = tx.parseTxExtra(tx.buildTxExtra({ txPublicKey, additionalPublicKeys, encryptedPaymentId }));
+      const parsed = tx.parseTxExtra(tx.buildTxExtra({
+        txPublicKey, additionalPublicKeys, encryptedPaymentId,
+      }));
       assert.deepStrictEqual(parsed.txPublicKey, txPublicKey);
       assert.deepStrictEqual(parsed.additionalPublicKeys, additionalPublicKeys);
       assert.deepStrictEqual(parsed.encryptedPaymentId, encryptedPaymentId);
@@ -280,7 +300,9 @@ describe('tx', () => {
           globalIndex: BigInt(1000 + j * 7),
         });
       }
-      return { secretKey, amount, mask, commitment, globalIndex: 9999n, decoys };
+      return {
+        secretKey, amount, mask, commitment, globalIndex: 9999n, decoys,
+      };
     };
     // reconstruct the sorted ring createTransaction builds internally, as clsag ring members
     const sortedRing = (input) => {
@@ -312,9 +334,13 @@ describe('tx', () => {
       const fee = 10000n;
       const outputs = [
         { ...recipient, amount: 4000000n },
-        { ...sender, isChange: true, amount: 990000n },
+        {
+          ...sender, isChange: true, amount: 990000n,
+        },
       ];
-      const bytes = tx.createTransaction({ inputs, outputs, secretViewKey: sender.secretView });
+      const bytes = tx.createTransaction({
+        inputs, outputs, secretViewKey: sender.secretView,
+      });
 
       // serialization round-trips
       const decoded = raw.transaction.decode(bytes);
@@ -326,7 +352,9 @@ describe('tx', () => {
       assert.equal(decoded.rctSigBase.txnFee, fee);
 
       const { outPk } = decoded.rctSigBase;
-      const { bulletproofsPlus, CLSAGs, pseudoOuts } = decoded.rctSigPrunable;
+      const {
+        bulletproofsPlus, CLSAGs, pseudoOuts,
+      } = decoded.rctSigPrunable;
 
       // range proof verifies
       assert.ok(bulletproofs.verifyBulletproofPlus(outPk, bulletproofsPlus[0]));
@@ -346,7 +374,9 @@ describe('tx', () => {
       decoded.prefix.vin.forEach((vin, i) => {
         const pubs = ringByKi.get(bytesToHex(vin.data.keyImage));
         assert.ok(pubs, 'key image not found among inputs');
-        const sig = { s: CLSAGs[i].s, c1: CLSAGs[i].c1, I: vin.data.keyImage, D: CLSAGs[i].D };
+        const sig = {
+          s: CLSAGs[i].s, c1: CLSAGs[i].c1, I: vin.data.keyImage, D: CLSAGs[i].D,
+        };
         assert.ok(clsag.verifyClsag(message, pubs, pseudoOuts[i], sig));
       });
 
@@ -362,9 +392,13 @@ describe('tx', () => {
       const sender = stdWallet();
       const outputs = [
         { ...stdWallet(), amount: 4000000n },
-        { ...sender, isChange: true, amount: 1000000n },
+        {
+          ...sender, isChange: true, amount: 1000000n,
+        },
       ];
-      const params = { inputs, outputs, secretViewKey: sender.secretView };
+      const params = {
+        inputs, outputs, secretViewKey: sender.secretView,
+      };
       const prepared = tx.prepareTransaction(params);
       assert.ok(prepared.prefix && prepared.rctSigBase && prepared.rctSigPrunable);
       const bytes = tx.createTransaction(params);
@@ -396,7 +430,9 @@ describe('tx', () => {
       assert.throws(() => tx.createTransaction({ inputs: [{ ...input, amount: -1n }], outputs: [output] }), /uint64 bigint/);
       assert.throws(() => tx.createTransaction({ inputs: [input], outputs: [{ ...output, amount: 2n ** 64n }] }), /uint64 bigint/);
       assert.throws(() => tx.createTransaction({ inputs: [input], outputs: [{ ...output, amount: 100n }] }), /outputs exceed inputs/);
-      assert.throws(() => tx.createTransaction({ inputs: [input], outputs: [output], unlockTime: 2n ** 64n }), /uint64 bigint/);
+      assert.throws(() => tx.createTransaction({
+        inputs: [input], outputs: [output], unlockTime: 2n ** 64n,
+      }), /uint64 bigint/);
       input.decoys[0].globalIndex = -1n;
       assert.throws(() => tx.createTransaction({ inputs: [input], outputs: [output] }), /uint64 bigint/);
     });
@@ -404,7 +440,9 @@ describe('tx', () => {
     it('rejects a payment id with more than one recipient', () => {
       const inputs = [makeInput(5010000n)];
       const outputs = [
-        { ...stdWallet(), type: 'integratedaddress', paymentID: randomBytes(8), amount: 2000000n },
+        {
+          ...stdWallet(), type: 'integratedaddress', paymentID: randomBytes(8), amount: 2000000n,
+        },
         { ...stdWallet(), amount: 3000000n },
       ];
       assert.throws(() => tx.createTransaction({ inputs, outputs }));
@@ -416,8 +454,12 @@ describe('tx', () => {
       const sender = stdWallet();
       const paymentId = randomBytes(8);
       const outputs = [
-        { ...recipient, type: 'integratedaddress', paymentID: paymentId, amount: 4000000n },
-        { ...sender, isChange: true, amount: 1000000n },
+        {
+          ...recipient, type: 'integratedaddress', paymentID: paymentId, amount: 4000000n,
+        },
+        {
+          ...sender, isChange: true, amount: 1000000n,
+        },
       ];
       const bytes = tx.createTransaction({
         inputs, outputs, secretViewKey: sender.secretView,

@@ -1,5 +1,9 @@
 import assert from 'node:assert/strict';
-import { bytesToHex, hexToBytes, randomBytes } from '@noble/hashes/utils.js';
+import {
+  bytesToHex,
+  hexToBytes,
+  randomBytes,
+} from '@noble/hashes/utils.js';
 import { describe, it } from 'node:test';
 
 import * as clsag from '../lib/clsag.js';
@@ -50,7 +54,9 @@ describe('clsag', () => {
   describe('sign + verify round-trip', () => {
     for (const [n, index] of [[1, 0], [2, 0], [2, 1], [11, 0], [11, 5], [11, 10], [16, 15]]) {
       it(`ring size ${n}, real index ${index}`, () => {
-        const { message, ring, signer, pseudoOut } = setup(n, index);
+        const {
+          message, ring, signer, pseudoOut,
+        } = setup(n, index);
         const sig = clsag.proveClsag(message, ring, pseudoOut, signer);
         assert.equal(sig.s.length, n);
         assert.ok(clsag.verifyClsag(message, ring, pseudoOut, sig));
@@ -59,7 +65,9 @@ describe('clsag', () => {
   });
 
   it('proveClsag rejects an invalid signing index', () => {
-    const { message, ring, pseudoOut, signer } = setup(8, 3);
+    const {
+      message, ring, pseudoOut, signer,
+    } = setup(8, 3);
     for (const index of [8, -1, 1.5, NaN, '1']) {
       assert.throws(() => clsag.proveClsag(message, ring, pseudoOut, { ...signer, index }));
     }
@@ -67,7 +75,9 @@ describe('clsag', () => {
   });
 
   it('key image matches generateKeyImage', () => {
-    const { message, ring, signer, pseudoOut, real } = setup(4, 2);
+    const {
+      message, ring, signer, pseudoOut, real,
+    } = setup(4, 2);
     const sig = clsag.proveClsag(message, ring, pseudoOut, signer);
     assert.equal(bytesToHex(sig.I), bytesToHex(crypto.generateKeyImage(real.pub, real.sec)));
   });
@@ -99,7 +109,9 @@ describe('clsag', () => {
   describe('rejects invalid signatures', () => {
     // bad inputs at signing time → must fail verification
     it('wrong real index at creation', () => {
-      const { message, ring, signer, pseudoOut } = setup(8, 3);
+      const {
+        message, ring, signer, pseudoOut,
+      } = setup(8, 3);
       const sig = clsag.proveClsag(
         message,
         ring,
@@ -110,7 +122,9 @@ describe('clsag', () => {
     });
 
     it('wrong commitment mask z at creation', () => {
-      const { message, ring, signer, pseudoOut } = setup(8, 3);
+      const {
+        message, ring, signer, pseudoOut,
+      } = setup(8, 3);
       const sig = clsag.proveClsag(
         message,
         ring,
@@ -121,7 +135,9 @@ describe('clsag', () => {
     });
 
     it('wrong spend key p at creation', () => {
-      const { message, ring, signer, pseudoOut } = setup(8, 3);
+      const {
+        message, ring, signer, pseudoOut,
+      } = setup(8, 3);
       const sig = clsag.proveClsag(
         message,
         ring,
@@ -132,14 +148,18 @@ describe('clsag', () => {
     });
 
     it('bad output key P at creation', () => {
-      const { message, ring, signer, pseudoOut } = setup(8, 3);
+      const {
+        message, ring, signer, pseudoOut,
+      } = setup(8, 3);
       ring[signer.index] = { publicKey: crypto.generateKeys().pub, commitment: ring[signer.index].commitment };
       const sig = clsag.proveClsag(message, ring, pseudoOut, signer);
       assert.ok(!clsag.verifyClsag(message, ring, pseudoOut, sig));
     });
 
     it('bad commitment C at creation', () => {
-      const { message, ring, signer, pseudoOut } = setup(8, 3);
+      const {
+        message, ring, signer, pseudoOut,
+      } = setup(8, 3);
       ring[signer.index] = {
         publicKey: ring[signer.index].publicKey,
         commitment: ringct.pedersenCommitment(1n, crypto.randomScalar()),
@@ -150,13 +170,17 @@ describe('clsag', () => {
 
     // tampering at verification time → must fail
     it('wrong message', () => {
-      const { message, ring, signer, pseudoOut } = setup(8, 3);
+      const {
+        message, ring, signer, pseudoOut,
+      } = setup(8, 3);
       const sig = clsag.proveClsag(message, ring, pseudoOut, signer);
       assert.ok(!clsag.verifyClsag(randomBytes(32), ring, pseudoOut, sig));
     });
 
     it('wrong pseudoOut commitment', () => {
-      const { message, ring, signer, pseudoOut } = setup(8, 3);
+      const {
+        message, ring, signer, pseudoOut,
+      } = setup(8, 3);
       const sig = clsag.proveClsag(message, ring, pseudoOut, signer);
       assert.ok(!clsag.verifyClsag(
         message,
@@ -167,14 +191,18 @@ describe('clsag', () => {
     });
 
     it('tampered s scalar', () => {
-      const { message, ring, signer, pseudoOut } = setup(8, 3);
+      const {
+        message, ring, signer, pseudoOut,
+      } = setup(8, 3);
       const sig = clsag.proveClsag(message, ring, pseudoOut, signer);
       sig.s[0] = helpers.encodeInt(crypto.randomScalar());
       assert.ok(!clsag.verifyClsag(message, ring, pseudoOut, sig));
     });
 
     it('wrong number of s elements', () => {
-      const { message, ring, signer, pseudoOut } = setup(8, 3);
+      const {
+        message, ring, signer, pseudoOut,
+      } = setup(8, 3);
       const sig = clsag.proveClsag(message, ring, pseudoOut, signer);
       assert.ok(!clsag.verifyClsag(message, ring, pseudoOut, { ...sig, s: sig.s.slice(0, -1) }));
       const extra = helpers.encodeInt(crypto.randomScalar());
@@ -183,7 +211,9 @@ describe('clsag', () => {
     });
 
     it('tampered c1', () => {
-      const { message, ring, signer, pseudoOut } = setup(8, 3);
+      const {
+        message, ring, signer, pseudoOut,
+      } = setup(8, 3);
       const sig = clsag.proveClsag(message, ring, pseudoOut, signer);
       assert.ok(!clsag.verifyClsag(
         message,
@@ -194,25 +224,35 @@ describe('clsag', () => {
     });
 
     it('tampered key image I', () => {
-      const { message, ring, signer, pseudoOut } = setup(8, 3);
+      const {
+        message, ring, signer, pseudoOut,
+      } = setup(8, 3);
       const sig = clsag.proveClsag(message, ring, pseudoOut, signer);
       assert.ok(!clsag.verifyClsag(message, ring, pseudoOut, { ...sig, I: crypto.generateKeys().pub }));
     });
 
     it('tampered auxiliary key image D', () => {
-      const { message, ring, signer, pseudoOut } = setup(8, 3);
+      const {
+        message, ring, signer, pseudoOut,
+      } = setup(8, 3);
       const sig = clsag.proveClsag(message, ring, pseudoOut, signer);
       assert.ok(!clsag.verifyClsag(message, ring, pseudoOut, { ...sig, D: crypto.generateKeys().pub }));
     });
 
     it('swapped I and D', () => {
-      const { message, ring, signer, pseudoOut } = setup(8, 3);
+      const {
+        message, ring, signer, pseudoOut,
+      } = setup(8, 3);
       const sig = clsag.proveClsag(message, ring, pseudoOut, signer);
-      assert.ok(!clsag.verifyClsag(message, ring, pseudoOut, { ...sig, I: sig.D, D: sig.I }));
+      assert.ok(!clsag.verifyClsag(message, ring, pseudoOut, {
+        ...sig, I: sig.D, D: sig.I,
+      }));
     });
 
     it('D not in main subgroup', () => {
-      const { message, ring, signer, pseudoOut } = setup(8, 3);
+      const {
+        message, ring, signer, pseudoOut,
+      } = setup(8, 3);
       const sig = clsag.proveClsag(message, ring, pseudoOut, signer);
       // add an order-8 torsion point to D (same constant as the monero unit test)
       const torsion = crypto.decodePoint(

@@ -4,4 +4,9 @@ import config, { node } from 'eslint-config-coinspace';
 export default [
   ...config,
   ...node,
+  {
+    rules: {
+      'object-curly-newline': ['error', { minProperties: 3, consistent: true }],
+    },
+  },
 ];

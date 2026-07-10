@@ -1,6 +1,8 @@
 /* eslint-disable max-len */
 import assert from 'node:assert';
-import { before, describe, it } from 'node:test';
+import {
+  before, describe, it,
+} from 'node:test';
 import { bytesToHex, hexToBytes } from '@noble/hashes/utils.js';
 
 import * as crypto from '../lib/crypto.js';
