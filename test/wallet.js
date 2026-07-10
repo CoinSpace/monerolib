@@ -3,7 +3,6 @@ import assert from 'node:assert';
 import { before, describe, it } from 'node:test';
 import { bytesToHex, hexToBytes } from '@noble/hashes/utils.js';
 
-import * as config from '../lib/config.js';
 import * as crypto from '../lib/crypto.js';
 import * as helpers from '../lib/helpers.js';
 import * as ringct from '../lib/ringct.js';
@@ -158,9 +157,11 @@ describe('wallet', () => {
         txPublicKey,
         outputKey: crypto.derivePublicKey(derivation, index, keys.publicSpendKey),
         index,
-        ecdhInfo: ringct.ecdhEncode({ amount: helpers.encodeInt(amount) }, amountKey, config.RCTTypes.CLSAG).amount.slice(0, 8),
+        ecdhInfo: {
+          amount: ringct.ecdhEncode({ amount: helpers.encodeInt(amount) }, amountKey, ringct.RCTTypes.CLSAG).amount.slice(0, 8),
+        },
         outPk: ringct.pedersenCommitment(amount, mask),
-        rctType: config.RCTTypes.CLSAG,
+        rctType: ringct.RCTTypes.CLSAG,
       };
     }
 

@@ -353,7 +353,7 @@ describe('tx', () => {
       // the recipient (output 0) can decode the amount and the commitment matches
       const { txPublicKey } = tx.parseTxExtra(decoded.prefix.extra);
       const derivation = crypto.generateKeyDerivation(txPublicKey, recipient.secretView);
-      const ecdh = ringct.decodeRct({ amount: decoded.rctSigBase.ecdhInfo[0] }, outPk[0], 6, 0, derivation);
+      const ecdh = ringct.decodeRct(decoded.rctSigBase.ecdhInfo[0], outPk[0], 6, 0, derivation);
       assert.equal(ecdh.amount, 4000000n);
     });
 
