@@ -437,15 +437,35 @@ describe('tx', () => {
       assert.throws(() => tx.createTransaction({ inputs: [input], outputs: [output] }), /uint64 bigint/);
     });
 
-    it('rejects a payment id with more than one recipient', () => {
+    it('allows an integrated address alongside other recipients; the id goes to the integrated one', () => {
+      const inputs = [makeInput(5010000n)];
+      const integrated = stdWallet();
+      const other = stdWallet();
+      const paymentId = randomBytes(8);
+      const outputs = [
+        {
+          ...integrated, type: 'integratedaddress', paymentID: paymentId, amount: 2000000n,
+        },
+        { ...other, amount: 3000000n },
+      ];
+      const bytes = tx.createTransaction({ inputs, outputs });
+      const { encryptedPaymentId, txPublicKey } = tx.parseTxExtra(raw.transaction.decode(bytes).prefix.extra);
+      assert.equal(encryptedPaymentId.length, 8);
+      // the integrated recipient recovers its id; the other recipient is unaffected
+      assert.deepStrictEqual(tx.encryptPaymentId(encryptedPaymentId, txPublicKey, integrated.secretView), paymentId);
+    });
+
+    it('rejects more than one address with a payment id', () => {
       const inputs = [makeInput(5010000n)];
       const outputs = [
         {
           ...stdWallet(), type: 'integratedaddress', paymentID: randomBytes(8), amount: 2000000n,
         },
-        { ...stdWallet(), amount: 3000000n },
+        {
+          ...stdWallet(), type: 'integratedaddress', paymentID: randomBytes(8), amount: 3000000n,
+        },
       ];
-      assert.throws(() => tx.createTransaction({ inputs, outputs }));
+      assert.throws(() => tx.createTransaction({ inputs, outputs }), /multiple addresses with payment ids/);
     });
 
     it('embeds the payment id of an integrated-address recipient', () => {
