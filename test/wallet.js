@@ -183,5 +183,39 @@ describe('wallet', () => {
       assert.strictEqual(owned.secretKey, undefined);
       assert.strictEqual(owned.keyImage, undefined);
     });
+
+    // a coinbase output: not RingCT (Null type), cleartext amount, no ecdh/commitment
+    function coinbaseOutputTo(keys, amount) {
+      const txSecretKey = crypto.randomScalar();
+      const derivation = crypto.generateKeyDerivation(keys.publicViewKey, txSecretKey);
+      return {
+        txPublicKey: crypto.secretKeyToPublicKey(txSecretKey),
+        outputKey: crypto.derivePublicKey(derivation, 0, keys.publicSpendKey),
+        index: 0,
+        rctType: ringct.RCTTypes.Null,
+        amount,
+      };
+    }
+
+    it('detects a coinbase output (cleartext amount, mask 1)', () => {
+      const keys = wallet.keysFromSeed(hexToBytes('8d8c8eeca38ac3b46aa293fd519b3860e96b5f873c12a95e3e1cdeda0bac4903'));
+      const owned = wallet.scanOutput(keys, coinbaseOutputTo(keys, 600000000000n), wallet.subaddressLookup(keys, 1, 1));
+      assert.strictEqual(owned.amount, 600000000000n);
+      assert.strictEqual(owned.mask, 1n);
+      assert.deepStrictEqual(owned.commitment, ringct.zeroCommit(600000000000n));
+      assert.strictEqual(owned.keyImage.length, 32);
+    });
+  });
+
+  describe('isMature', () => {
+    it('regular output needs DEFAULT_SPENDABLE_AGE (10) confirmations', () => {
+      assert.strictEqual(wallet.isMature({ height: 100 }, 109), false);
+      assert.strictEqual(wallet.isMature({ height: 100 }, 110), true);
+    });
+
+    it('coinbase output needs COINBASE_UNLOCK_WINDOW (60) confirmations', () => {
+      assert.strictEqual(wallet.isMature({ height: 100, isCoinbase: true }, 159), false);
+      assert.strictEqual(wallet.isMature({ height: 100, isCoinbase: true }, 160), true);
+    });
   });
 });

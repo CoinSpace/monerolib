@@ -102,7 +102,7 @@ describe('ringct', () => {
         hexToBytes('c21ac180b9702ffb85930724a28698ebf2a196bcc8ee205b159c5755f3b32a69')
       );
       assert.deepStrictEqual(result, {
-        mask: hexToBytes('29888c690b7a9f99e5294d1494b684e38a1747d586c51c130b2933dcfdb7cc08'),
+        mask: helpers.decodeInt(hexToBytes('29888c690b7a9f99e5294d1494b684e38a1747d586c51c130b2933dcfdb7cc08')),
         amount: 1000000000000n,
       });
       const result2 = ringct.decodeRct(
@@ -113,7 +113,7 @@ describe('ringct', () => {
         hexToBytes('5c673fbe576152ce517dc463a7b9db68fcd21117a46b4ee9e4cd34b44d0a8b98')
       );
       assert.deepStrictEqual(result2, {
-        mask: hexToBytes('6c75a44d7c8b34603c5bd80dfce4b3bb4c8bab190c0470374111c50d2f576f09'),
+        mask: helpers.decodeInt(hexToBytes('6c75a44d7c8b34603c5bd80dfce4b3bb4c8bab190c0470374111c50d2f576f09')),
         amount: 69365204653916n,
       });
     });
@@ -141,7 +141,7 @@ describe('ringct', () => {
           derivation
         );
         assert.deepStrictEqual(ecdh, {
-          mask: hexToBytes(output.mask),
+          mask: helpers.decodeInt(hexToBytes(output.mask)),
           amount: BigInt(output.amount),
         });
       }
@@ -165,6 +165,17 @@ describe('ringct', () => {
         0,
         new Uint8Array(32)
       ), /unknown rct type/);
+    });
+  });
+
+  describe('decodeCoinbase', () => {
+    it('returns cleartext amount, mask 1, and the transparent commitment', () => {
+      const amount = 1038074340649n;
+      assert.deepStrictEqual(ringct.decodeCoinbase(amount), {
+        amount,
+        mask: 1n,
+        commitment: ringct.zeroCommit(amount),
+      });
     });
   });
 

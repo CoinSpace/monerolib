@@ -417,24 +417,33 @@ describe('tx', () => {
       assert.throws(() => tx.createTransaction({
         inputs: [makeInput(0n)],
         outputs: [],
-      }), /invalid number of outputs/);
+      }), /at least two outputs/);
+      // monero requires at least two outputs; a single-output tx is rejected on-chain
+      assert.throws(() => tx.createTransaction({
+        inputs: [makeInput(0n)],
+        outputs: [{ ...stdWallet(), amount: 0n }],
+      }), /at least two outputs/);
       assert.throws(() => tx.createTransaction({
         inputs: [makeInput(0n)],
         outputs: Array.from({ length: 17 }, () => ({ ...stdWallet(), amount: 0n })),
-      }), /invalid number of outputs/);
+      }), /too many outputs/);
     });
 
     it('rejects non-uint64 amounts, unlock time and offsets, and outputs exceeding inputs', () => {
       const input = makeInput(10n);
       const output = { ...stdWallet(), amount: 9n };
-      assert.throws(() => tx.createTransaction({ inputs: [{ ...input, amount: -1n }], outputs: [output] }), /uint64 bigint/);
-      assert.throws(() => tx.createTransaction({ inputs: [input], outputs: [{ ...output, amount: 2n ** 64n }] }), /uint64 bigint/);
-      assert.throws(() => tx.createTransaction({ inputs: [input], outputs: [{ ...output, amount: 100n }] }), /outputs exceed inputs/);
+      // a second (change) output so these reach the intended errors past the >=2 outputs guard
+      const change = {
+        ...stdWallet(), isChange: true, amount: 0n,
+      };
+      assert.throws(() => tx.createTransaction({ inputs: [{ ...input, amount: -1n }], outputs: [output, change] }), /uint64 bigint/);
+      assert.throws(() => tx.createTransaction({ inputs: [input], outputs: [{ ...output, amount: 2n ** 64n }, change] }), /uint64 bigint/);
+      assert.throws(() => tx.createTransaction({ inputs: [input], outputs: [{ ...output, amount: 100n }, change] }), /outputs exceed inputs/);
       assert.throws(() => tx.createTransaction({
-        inputs: [input], outputs: [output], unlockTime: 2n ** 64n,
+        inputs: [input], outputs: [output, change], unlockTime: 2n ** 64n,
       }), /uint64 bigint/);
       input.decoys[0].globalIndex = -1n;
-      assert.throws(() => tx.createTransaction({ inputs: [input], outputs: [output] }), /uint64 bigint/);
+      assert.throws(() => tx.createTransaction({ inputs: [input], outputs: [output, change] }), /uint64 bigint/);
     });
 
     it('allows an integrated address alongside other recipients; the id goes to the integrated one', () => {
