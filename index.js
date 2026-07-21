@@ -1,6 +1,8 @@
 export * as crypto from './lib/crypto.js';
 export * as decoys from './lib/decoys.js';
+export * as epee from './lib/epee.js';
 export * as helpers from './lib/helpers.js';
+export * as raw from './lib/raw.js';
 export * as ringct from './lib/ringct.js';
 export * as tx from './lib/tx.js';
 export * as wallet from './lib/wallet.js';
