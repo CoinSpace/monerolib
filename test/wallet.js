@@ -408,6 +408,116 @@ describe('wallet', () => {
     });
   });
 
+  describe('createTransaction', () => {
+    const BASE_FEE = 1000n;
+    const FEE_QUANTIZATION = 10000n;
+
+    // a fake input paying the incoming tx (secretSpendKey 0n => one-time secret is keyOffset)
+    const makeInput = (amount) => {
+      const keyOffset = crypto.randomScalar();
+      const mask = crypto.randomScalar();
+      return {
+        keyOffset, publicKey: crypto.secretKeyToPublicKey(keyOffset), amount, mask, commitment: ringct.pedersenCommitment(amount, mask), globalIndex: 1n, decoys: [],
+      };
+    };
+
+    // a real spendable input of `amount` owned by `keys`: send it to the wallet, scan it, attach a ring
+    const spendable = (keys, amount) => {
+      const incoming = tx.createTransaction({
+        inputs: [makeInput(amount + 2000000n)],
+        outputs: [
+          {
+            type: 'address', publicSpendKey: keys.publicSpendKey, publicViewKey: keys.publicViewKey, amount,
+          },
+          {
+            type: 'address', publicSpendKey: keys.publicSpendKey, publicViewKey: keys.publicViewKey, isChange: true, amount: 1000000n,
+          },
+        ],
+        secretSpendKey: 0n,
+        secretViewKey: helpers.decodeInt(keys.secretViewKey),
+      });
+      const owned = wallet.scanTransaction(keys, raw.transaction.decode(incoming), wallet.subaddressLookup(keys, 1, 1)).outputs[0];
+      const decoys = Array.from({ length: 15 }, (unused, j) => ({
+        publicKey: crypto.secretKeyToPublicKey(crypto.randomScalar()),
+        commitment: crypto.secretKeyToPublicKey(crypto.randomScalar()),
+        globalIndex: BigInt(2000 + j),
+      }));
+      return {
+        ...owned, globalIndex: 42n, decoys,
+      };
+    };
+
+    it('changeOutput and dummyOutput shapes', () => {
+      const keys = wallet.keysFromSeed(hexToBytes('8d8c8eeca38ac3b46aa293fd519b3860e96b5f873c12a95e3e1cdeda0bac4903'));
+      const change = wallet.changeOutput(keys, 123n);
+      assert.strictEqual(change.type, 'address');
+      assert.strictEqual(change.isChange, true);
+      assert.strictEqual(change.amount, 123n);
+      assert.deepStrictEqual(change.publicSpendKey, keys.publicSpendKey);
+
+      const dummy = wallet.dummyOutput();
+      assert.strictEqual(dummy.type, 'address');
+      assert.strictEqual(dummy.isChange, true);
+      assert.strictEqual(dummy.amount, 0n);
+      assert.strictEqual(dummy.publicSpendKey.length, 32);
+      assert.notDeepEqual(dummy.publicSpendKey, wallet.dummyOutput().publicSpendKey); // random each call
+    });
+
+    it('appends a change output the wallet can scan', () => {
+      const keys = wallet.keysFromSeed(hexToBytes('8d8c8eeca38ac3b46aa293fd519b3860e96b5f873c12a95e3e1cdeda0bac4903'));
+      const recipient = wallet.keysFromSeed(hexToBytes('9e9d9eeca38ac3b46aa293fd519b3860e96b5f873c12a95e3e1cdeda0bac4904'));
+      const input = spendable(keys, 5000000n);
+      const { json: decoded, hex } = wallet.createTransaction({
+        inputs: [input],
+        outputs: [{
+          type: 'address', publicSpendKey: recipient.publicSpendKey, publicViewKey: recipient.publicViewKey, amount: 1000000n,
+        }],
+        keys,
+        baseFee: BASE_FEE,
+        feeQuantization: FEE_QUANTIZATION,
+      });
+      assert.strictEqual(hex, bytesToHex(raw.transaction.encode(decoded))); // hex is the encoded json
+      assert.strictEqual(decoded.prefix.vout.length, 2); // recipient + change
+      const found = wallet.scanTransaction(keys, decoded, wallet.subaddressLookup(keys, 1, 1)).outputs;
+      assert.strictEqual(found.length, 1); // only our change (the recipient output is not ours)
+      assert.strictEqual(found[0].amount, input.amount - 1000000n - decoded.rctSigBase.txnFee);
+    });
+
+    it('pads a single-subaddress send to two outputs with a dummy, extra not inflated', () => {
+      const keys = wallet.keysFromSeed(hexToBytes('8d8c8eeca38ac3b46aa293fd519b3860e96b5f873c12a95e3e1cdeda0bac4903'));
+      const other = wallet.keysFromSeed(hexToBytes('9e9d9eeca38ac3b46aa293fd519b3860e96b5f873c12a95e3e1cdeda0bac4904'));
+      const sub = address('mainnet').decode(wallet.getSubaddress(other, { major: 1, minor: 1 }));
+      // exact funds: input == recipient + the two-output fee => no change => a dummy is added
+      const recipientAmount = 1000000n;
+      const fee = tx.estimateFee(1, 15, 2, tx.estimateExtraSize([{ ...sub, amount: recipientAmount }, { isChange: true }]), BASE_FEE, 1n, FEE_QUANTIZATION);
+      const input = spendable(keys, recipientAmount + fee);
+      const { json: decoded } = wallet.createTransaction({
+        inputs: [input],
+        outputs: [{ ...sub, amount: recipientAmount }],
+        keys,
+        baseFee: BASE_FEE,
+        feeQuantization: FEE_QUANTIZATION,
+      });
+      assert.strictEqual(decoded.prefix.vout.length, 2); // subaddress recipient + dummy
+      assert.strictEqual(decoded.prefix.extra.length, 44); // dummy classified as change: no additional keys
+      assert.strictEqual(decoded.rctSigBase.txnFee, fee);
+    });
+
+    it('throws when inputs cannot cover the outputs and fee', () => {
+      const keys = wallet.keysFromSeed(hexToBytes('8d8c8eeca38ac3b46aa293fd519b3860e96b5f873c12a95e3e1cdeda0bac4903'));
+      const input = spendable(keys, 100000n);
+      assert.throws(() => wallet.createTransaction({
+        inputs: [input],
+        outputs: [{
+          type: 'address', publicSpendKey: keys.publicSpendKey, publicViewKey: keys.publicViewKey, amount: 100000000000n,
+        }],
+        keys,
+        baseFee: BASE_FEE,
+        feeQuantization: FEE_QUANTIZATION,
+      }), /not enough funds/);
+    });
+  });
+
   describe('isOwnKeyImage', () => {
     it('true for a genuine spend of our own output', () => {
       const keys = wallet.keysFromSeed(hexToBytes('8d8c8eeca38ac3b46aa293fd519b3860e96b5f873c12a95e3e1cdeda0bac4903'));
