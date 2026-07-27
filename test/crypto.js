@@ -323,17 +323,38 @@ describe('crypto', () => {
     });
 
     describe('outputKeyImage', () => {
-      it('main account (0, 0): secret*G is the one-time key and keyImage matches', () => {
+      // reconstruct the one-time secret x independently (deriveSecretKey over the subaddress spend
+      // secret), then check outputKeyImage returns I = x * Hp(x*G)
+      it('main account (0, 0): key image of the one-time key derived over B', () => {
         const derivation = crypto.generateKeyDerivation(B, a);
-        const { secret, keyImage } = crypto.outputKeyImage(a, b, derivation, 0, { major: 0, minor: 0 });
+        const secret = crypto.deriveSecretKey(derivation, 0, crypto.subaddressSecretSpendKey(a, b, { major: 0, minor: 0 }));
         const oneTimeKey = crypto.derivePublicKey(derivation, 0, B);
         assert.deepStrictEqual(crypto.secretKeyToPublicKey(secret), oneTimeKey);
-        assert.deepStrictEqual(keyImage, crypto.generateKeyImage(oneTimeKey, secret));
+        assert.deepStrictEqual(crypto.outputKeyImage(a, b, derivation, 0, { major: 0, minor: 0 }), crypto.generateKeyImage(oneTimeKey, secret));
       });
-      it('subaddress (1, 1): secret*G is the one-time key derived over D', () => {
+      it('subaddress (1, 1): key image of the one-time key derived over D', () => {
         const derivation = crypto.generateKeyDerivation(B, a);
-        const { secret } = crypto.outputKeyImage(a, b, derivation, 0, { major: 1, minor: 1 });
-        assert.deepStrictEqual(crypto.secretKeyToPublicKey(secret), crypto.derivePublicKey(derivation, 0, hexToBytes(D)));
+        const secret = crypto.deriveSecretKey(derivation, 0, crypto.subaddressSecretSpendKey(a, b, { major: 1, minor: 1 }));
+        const oneTimeKey = crypto.derivePublicKey(derivation, 0, hexToBytes(D));
+        assert.deepStrictEqual(crypto.secretKeyToPublicKey(secret), oneTimeKey);
+        assert.deepStrictEqual(crypto.outputKeyImage(a, b, derivation, 0, { major: 1, minor: 1 }), crypto.generateKeyImage(oneTimeKey, secret));
+      });
+    });
+
+    describe('outputKeyOffset', () => {
+      // x = keyOffset + b, so keyOffset*G + B (the base spend key) is the one-time output key
+      it('keyOffset*G + base spend key equals the one-time output key (main and subaddress)', () => {
+        const derivation = crypto.generateKeyDerivation(B, a);
+        for (const { index, spendPub } of [
+          { index: { major: 0, minor: 0 }, spendPub: B },
+          { index: { major: 1, minor: 1 }, spendPub: hexToBytes(D) },
+        ]) {
+          const offset = crypto.outputKeyOffset(a, derivation, 0, index);
+          const reconstructed = crypto.encodePoint(
+            crypto.decodePoint(crypto.secretKeyToPublicKey(offset)).add(crypto.decodePoint(B))
+          );
+          assert.deepStrictEqual(reconstructed, crypto.derivePublicKey(derivation, 0, spendPub));
+        }
       });
     });
   });

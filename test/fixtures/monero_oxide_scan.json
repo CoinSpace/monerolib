@@ -6,12 +6,14 @@
     {
       "index": 0,
       "mask": "05c2f142aaf3054cbff0a022f6c7cb75403fd92af0f9441c072ade3f273f7706",
-      "amount": "10000"
+      "amount": "10000",
+      "keyOffset": "f1d21a76ea0bb228fbc5f0dece0597a8ffb59de7a04b29f70b7c0310446ea905"
     },
     {
       "index": 1,
       "mask": "c8922ce32cb2bf454a6b77bc91423ba7a18412b71fa39a97a2a743c1fe0bad04",
-      "amount": "10000"
+      "amount": "10000",
+      "keyOffset": "c5189738c1cb40e68d464f1a1848a85f6ab2c09652a31849213dc0fefd212806"
     }
   ]
 }

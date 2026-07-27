@@ -287,9 +287,10 @@ describe('tx', () => {
   });
 
   describe('createTransaction', () => {
-    // a fake owned output: one-time secret key, amount, mask, and a ring of decoys + the real one
+    // a fake owned output: view-only key offset, amount, mask, and a ring of decoys + the real one.
+    // secretSpendKey is 0 in these tests, so the one-time secret is keyOffset + 0 = keyOffset.
     const makeInput = (amount, ringSize = 11) => {
-      const secretKey = crypto.randomScalar();
+      const keyOffset = crypto.randomScalar();
       const mask = crypto.randomScalar();
       const commitment = ringct.pedersenCommitment(amount, mask);
       const decoys = [];
@@ -301,13 +302,19 @@ describe('tx', () => {
         });
       }
       return {
-        secretKey, amount, mask, commitment, globalIndex: 9999n, decoys,
+        keyOffset,
+        publicKey: crypto.secretKeyToPublicKey(keyOffset),
+        amount,
+        mask,
+        commitment,
+        globalIndex: 9999n,
+        decoys,
       };
     };
     // reconstruct the sorted ring createTransaction builds internally, as clsag ring members
     const sortedRing = (input) => {
       const real = {
-        publicKey: crypto.secretKeyToPublicKey(input.secretKey),
+        publicKey: input.publicKey,
         commitment: input.commitment,
         globalIndex: input.globalIndex,
       };
@@ -339,7 +346,7 @@ describe('tx', () => {
         },
       ];
       const bytes = tx.createTransaction({
-        inputs, outputs, secretViewKey: sender.secretView,
+        inputs, outputs, secretSpendKey: 0n, secretViewKey: sender.secretView,
       });
 
       // serialization round-trips
@@ -368,7 +375,7 @@ describe('tx', () => {
       const message = tx.getPreMlsagHash(crypto.fastHash(raw.txPrefix.encode(decoded.prefix)), decoded.rctSigBase, bulletproofsPlus[0]);
       const ringByKi = new Map();
       for (const input of inputs) {
-        const ki = bytesToHex(crypto.generateKeyImage(crypto.secretKeyToPublicKey(input.secretKey), input.secretKey));
+        const ki = bytesToHex(crypto.generateKeyImage(input.publicKey, input.keyOffset));
         ringByKi.set(ki, sortedRing(input));
       }
       decoded.prefix.vin.forEach((vin, i) => {
@@ -387,6 +394,15 @@ describe('tx', () => {
       assert.equal(ecdh.amount, 4000000n);
     });
 
+    it('rejects a wrong spend key: reconstructed key does not match the output', () => {
+      // makeInput's publicKey is keyOffset*G (b = 0); a non-zero spend key makes (keyOffset + b)*G != P
+      const inputs = [makeInput(5000000n)];
+      const outputs = [{ ...stdWallet(), amount: 4000000n }, { ...stdWallet(), amount: 990000n }];
+      assert.throws(() => tx.createTransaction({
+        inputs, outputs, secretSpendKey: crypto.randomScalar(),
+      }), /wrong spend key/);
+    });
+
     it('prepareTransaction returns the tx object, createTransaction returns its bytes', () => {
       const inputs = [makeInput(5010000n)];
       const sender = stdWallet();
@@ -397,7 +413,7 @@ describe('tx', () => {
         },
       ];
       const params = {
-        inputs, outputs, secretViewKey: sender.secretView,
+        inputs, outputs, secretSpendKey: 0n, secretViewKey: sender.secretView,
       };
       const prepared = tx.prepareTransaction(params);
       assert.ok(prepared.prefix && prepared.rctSigBase && prepared.rctSigPrunable);
@@ -457,7 +473,9 @@ describe('tx', () => {
         },
         { ...other, amount: 3000000n },
       ];
-      const bytes = tx.createTransaction({ inputs, outputs });
+      const bytes = tx.createTransaction({
+        inputs, outputs, secretSpendKey: 0n,
+      });
       const { encryptedPaymentId, txPublicKey } = tx.parseTxExtra(raw.transaction.decode(bytes).prefix.extra);
       assert.equal(encryptedPaymentId.length, 8);
       // the integrated recipient recovers its id; the other recipient is unaffected
@@ -491,7 +509,7 @@ describe('tx', () => {
         },
       ];
       const bytes = tx.createTransaction({
-        inputs, outputs, secretViewKey: sender.secretView,
+        inputs, outputs, secretSpendKey: 0n, secretViewKey: sender.secretView,
       });
       const { encryptedPaymentId, txPublicKey } = tx.parseTxExtra(raw.transaction.decode(bytes).prefix.extra);
       assert.equal(encryptedPaymentId.length, 8);
@@ -500,11 +518,11 @@ describe('tx', () => {
     });
   });
 
-  describe('globalIndexesFromKeyOffsets', () => {
+  describe('globalIndexesFromOutputOffsets', () => {
     it('reconstructs absolute indexes with uint64 wraparound (unsorted ring)', () => {
       const mask = (1n << 64n) - 1n;
       // a "negative" relative delta stored as 2^64 - 30 lowers the next index by 30
-      assert.deepStrictEqual(tx.globalIndexesFromKeyOffsets([100n, mask - 29n]), [100n, 70n]);
+      assert.deepStrictEqual(tx.globalIndexesFromOutputOffsets([100n, mask - 29n]), [100n, 70n]);
     });
   });
 
@@ -555,10 +573,10 @@ describe('tx', () => {
       };
     };
     const makeInput = (amount) => {
-      const secretKey = crypto.randomScalar();
+      const keyOffset = crypto.randomScalar();
       const mask = crypto.randomScalar();
       return {
-        secretKey, amount, mask, commitment: ringct.pedersenCommitment(amount, mask), globalIndex: 1n, decoys: [],
+        keyOffset, publicKey: crypto.secretKeyToPublicKey(keyOffset), amount, mask, commitment: ringct.pedersenCommitment(amount, mask), globalIndex: 1n, decoys: [],
       };
     };
 
@@ -568,7 +586,7 @@ describe('tx', () => {
       const sender = outputs.find((o) => o.isChange) ?? stdWallet();
       const inputs = [makeInput(1000000n)];
       const bytes = tx.createTransaction({
-        inputs, outputs, secretViewKey: sender.secretView,
+        inputs, outputs, secretSpendKey: 0n, secretViewKey: sender.secretView,
       });
       return raw.transaction.decode(bytes).prefix.extra.length;
     }

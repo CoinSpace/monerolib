@@ -7,6 +7,7 @@ import {
   bytesToHex, hexToBytes, randomBytes,
 } from '@noble/hashes/utils.js';
 
+import * as clsag from '../lib/clsag.js';
 import * as crypto from '../lib/crypto.js';
 import * as helpers from '../lib/helpers.js';
 import * as raw from '../lib/raw.js';
@@ -177,17 +178,17 @@ describe('wallet', () => {
       const keys = wallet.keysFromSeed(hexToBytes('8d8c8eeca38ac3b46aa293fd519b3860e96b5f873c12a95e3e1cdeda0bac4903'));
       const owned = wallet.scanOutput(keys, outputTo(keys, 4000000n), wallet.subaddressLookup(keys, 1, 1));
       assert.strictEqual(owned.amount, 4000000n);
-      assert.strictEqual(typeof owned.secretKey, 'bigint');
+      assert.strictEqual(typeof owned.keyOffset, 'bigint');
       assert.strictEqual(owned.keyImage.length, 32);
     });
 
-    it('view-only wallet: detects the output and amount, no key image', () => {
+    it('view-only wallet: detects the output, amount and key offset, but no key image', () => {
       const keys = wallet.keysFromSeed(hexToBytes('8d8c8eeca38ac3b46aa293fd519b3860e96b5f873c12a95e3e1cdeda0bac4903'));
       const viewOnly = wallet.viewOnlyKeys(keys.publicSpendKey, keys.secretViewKey);
       const owned = wallet.scanOutput(viewOnly, outputTo(keys, 4000000n), wallet.subaddressLookup(viewOnly, 1, 1));
       assert.strictEqual(owned.amount, 4000000n);
-      assert.strictEqual(owned.secretKey, undefined);
-      assert.strictEqual(owned.keyImage, undefined);
+      assert.strictEqual(typeof owned.keyOffset, 'bigint'); // view-only can produce the offset
+      assert.strictEqual(owned.keyImage, undefined); // but not the key image (needs the spend key)
     });
 
     // a coinbase output: not RingCT (Null type), cleartext amount, no ecdh/commitment
@@ -233,12 +234,13 @@ describe('wallet', () => {
   });
 
   describe('scanTransaction', () => {
-    // a fake spendable input, unrelated to the recipient being scanned for
+    // a fake spendable input, unrelated to the recipient being scanned for (secretSpendKey 0n below,
+    // so the one-time secret is keyOffset + 0 = keyOffset)
     const makeInput = (amount) => {
-      const secretKey = crypto.randomScalar();
+      const keyOffset = crypto.randomScalar();
       const mask = crypto.randomScalar();
       return {
-        secretKey, amount, mask, commitment: ringct.pedersenCommitment(amount, mask), globalIndex: 1n, decoys: [],
+        keyOffset, publicKey: crypto.secretKeyToPublicKey(keyOffset), amount, mask, commitment: ringct.pedersenCommitment(amount, mask), globalIndex: 1n, decoys: [],
       };
     };
 
@@ -256,6 +258,7 @@ describe('wallet', () => {
             type: 'address', publicSpendKey: sender.publicSpendKey, publicViewKey: sender.publicViewKey, isChange: true, amount: 300000n,
           },
         ],
+        secretSpendKey: 0n,
         secretViewKey: helpers.decodeInt(sender.secretViewKey),
       });
       const decodedTx = raw.transaction.decode(bytes);
@@ -267,7 +270,7 @@ describe('wallet', () => {
       assert.strictEqual(result.outputs[0].index, 0);
       assert.deepStrictEqual(result.outputs[0].subaddress, { major: 0, minor: 0 });
 
-      const expectedKeyImage = crypto.generateKeyImage(crypto.secretKeyToPublicKey(input.secretKey), input.secretKey);
+      const expectedKeyImage = crypto.generateKeyImage(input.publicKey, input.keyOffset);
       assert.strictEqual(result.spentKeyImages.length, 1);
       assert.deepStrictEqual(result.spentKeyImages[0], expectedKeyImage);
     });
@@ -285,6 +288,7 @@ describe('wallet', () => {
             type: 'address', publicSpendKey: recipient.publicSpendKey, publicViewKey: recipient.publicViewKey, isChange: true, amount: 300000n,
           },
         ],
+        secretSpendKey: 0n,
         secretViewKey: helpers.decodeInt(recipient.secretViewKey),
       });
       const decodedTx = raw.transaction.decode(bytes);
@@ -308,6 +312,7 @@ describe('wallet', () => {
             type: 'address', publicSpendKey: other.publicSpendKey, publicViewKey: other.publicViewKey, isChange: true, amount: 300000n,
           },
         ],
+        secretSpendKey: 0n,
         secretViewKey: helpers.decodeInt(other.secretViewKey),
       });
       const decodedTx = raw.transaction.decode(bytes);
@@ -337,8 +342,69 @@ describe('wallet', () => {
         assert.strictEqual(output.index, scanVector.outputs[i].index);
         assert.strictEqual(output.amount, BigInt(scanVector.outputs[i].amount));
         assert.deepStrictEqual(helpers.encodeInt(output.mask), hexToBytes(scanVector.outputs[i].mask));
+        assert.deepStrictEqual(helpers.encodeInt(output.keyOffset), hexToBytes(scanVector.outputs[i].keyOffset));
         assert.deepStrictEqual(output.paymentId, new Uint8Array(8)); // dummy payment id
       });
+    });
+
+    it('spends a scanned output with a non-zero spend key, signing against the real output key', () => {
+      const keys = wallet.keysFromSeed(hexToBytes('8d8c8eeca38ac3b46aa293fd519b3860e96b5f873c12a95e3e1cdeda0bac4903'));
+      // an incoming tx to our main address; scan it for keyOffset, publicKey and keyImage (real b)
+      const incoming = tx.createTransaction({
+        inputs: [makeInput(2000000n)],
+        outputs: [
+          {
+            type: 'address', publicSpendKey: keys.publicSpendKey, publicViewKey: keys.publicViewKey, amount: 1500000n,
+          },
+          {
+            type: 'address', publicSpendKey: keys.publicSpendKey, publicViewKey: keys.publicViewKey, isChange: true, amount: 490000n,
+          },
+        ],
+        secretSpendKey: 0n,
+        secretViewKey: helpers.decodeInt(keys.secretViewKey),
+      });
+      const owned = wallet.scanTransaction(keys, raw.transaction.decode(incoming), wallet.subaddressLookup(keys, 1, 1)).outputs[0];
+
+      // spend it: signing reconstructs x = keyOffset + b with a non-zero b
+      const decoys = Array.from({ length: 10 }, (unused, j) => ({
+        publicKey: crypto.secretKeyToPublicKey(crypto.randomScalar()),
+        commitment: crypto.secretKeyToPublicKey(crypto.randomScalar()),
+        globalIndex: BigInt(2000 + j),
+      }));
+      const recipient = wallet.keysFromSeed(hexToBytes('9e9d9eeca38ac3b46aa293fd519b3860e96b5f873c12a95e3e1cdeda0bac4904'));
+      const spend = raw.transaction.decode(tx.createTransaction({
+        inputs: [{
+          ...owned, globalIndex: 42n, decoys,
+        }],
+        outputs: [
+          {
+            type: 'address', publicSpendKey: recipient.publicSpendKey, publicViewKey: recipient.publicViewKey, amount: owned.amount - 20000n,
+          },
+          {
+            type: 'address', publicSpendKey: keys.publicSpendKey, publicViewKey: keys.publicViewKey, isChange: true, amount: 10000n,
+          },
+        ],
+        secretSpendKey: helpers.decodeInt(keys.secretSpendKey),
+        secretViewKey: helpers.decodeInt(keys.secretViewKey),
+      }));
+
+      // the key image matches the one scanOutput computed (proves x = keyOffset + b)
+      assert.deepStrictEqual(spend.prefix.vin[0].data.keyImage, owned.keyImage);
+
+      // CLSAG verifies against the ring holding the real output key P (owned.publicKey)
+      const {
+        bulletproofsPlus, CLSAGs, pseudoOuts,
+      } = spend.rctSigPrunable;
+      const message = tx.getPreMlsagHash(crypto.fastHash(raw.txPrefix.encode(spend.prefix)), spend.rctSigBase, bulletproofsPlus[0]);
+      const ring = [{
+        publicKey: owned.publicKey, commitment: owned.commitment, globalIndex: 42n,
+      }, ...decoys]
+        .sort((a, b) => (a.globalIndex < b.globalIndex ? -1 : 1))
+        .map((member) => ({ publicKey: member.publicKey, commitment: member.commitment }));
+      const sig = {
+        s: CLSAGs[0].s, c1: CLSAGs[0].c1, I: spend.prefix.vin[0].data.keyImage, D: CLSAGs[0].D,
+      };
+      assert.ok(clsag.verifyClsag(message, ring, pseudoOuts[0], sig));
     });
   });
 
@@ -348,7 +414,7 @@ describe('wallet', () => {
       const txSecretKey = crypto.randomScalar();
       const txPublicKey = crypto.secretKeyToPublicKey(txSecretKey);
       const derivation = crypto.generateKeyDerivation(keys.publicViewKey, txSecretKey);
-      const { keyImage } = crypto.outputKeyImage(
+      const keyImage = crypto.outputKeyImage(
         helpers.decodeInt(keys.secretViewKey), helpers.decodeInt(keys.secretSpendKey), derivation, 0, { major: 0, minor: 0 }
       );
       assert.strictEqual(wallet.isOwnKeyImage(keys, {
@@ -375,7 +441,7 @@ describe('wallet', () => {
       const derivation = crypto.generateKeyDerivation(
         additionalPublicKey, helpers.decodeInt(keys.secretViewKey)
       );
-      const { keyImage } = crypto.outputKeyImage(
+      const keyImage = crypto.outputKeyImage(
         helpers.decodeInt(keys.secretViewKey),
         helpers.decodeInt(keys.secretSpendKey),
         derivation,
