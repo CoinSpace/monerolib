@@ -9,7 +9,7 @@ import * as raw from '../lib/raw.js';
 import * as ringct from '../lib/ringct.js';
 import * as tx from '../lib/tx.js';
 // https://github.com/monero-oxide/monero-oxide/blob/946ec5f00ff071b129758ee8cba5528539fccfe4/monero-oxide/wallet/src/tests/scan.rs#L17-L167
-import longAmountFixture from './fixtures/ringct_long_encrypted_amount.json' with { type: 'json' };
+import scanVector from './fixtures/monero_oxide_scan.json' with { type: 'json' };
 
 describe('ringct', () => {
 
@@ -121,7 +121,7 @@ describe('ringct', () => {
     // pruned tx + expected decoded outputs derived from:
     // https://github.com/monero-oxide/monero-oxide/blob/946ec5f00ff071b129758ee8cba5528539fccfe4/monero-oxide/wallet/src/tests/scan.rs#L17-L167
     it('decodes a real long-amount tx', () => {
-      const bytes = hexToBytes(longAmountFixture.hex);
+      const bytes = hexToBytes(scanVector.hex);
       const prefix = raw.txPrefix.decode(bytes, { allowUnreadBytes: true });
       const prefixBytes = raw.txPrefix.encode(prefix);
       const rctSigBase = raw.rctBase(prefix.vin.length, prefix.vout.length)
@@ -129,10 +129,10 @@ describe('ringct', () => {
       const { txPublicKey } = tx.parseTxExtra(prefix.extra);
       const derivation = crypto.generateKeyDerivation(
         txPublicKey,
-        helpers.decodeInt(hexToBytes(longAmountFixture.secretViewKey))
+        helpers.decodeInt(hexToBytes(scanVector.secretViewKey))
       );
 
-      for (const output of longAmountFixture.outputs) {
+      for (const output of scanVector.outputs) {
         const ecdh = ringct.decodeRct(
           rctSigBase.ecdhInfo[output.index],
           rctSigBase.outPk[output.index],

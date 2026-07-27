@@ -533,6 +533,102 @@ describe('tx', () => {
     });
   });
 
+  describe('estimateExtraSize', () => {
+    const stdWallet = () => {
+      const secretView = crypto.randomScalar();
+      const secretSpend = crypto.randomScalar();
+      return {
+        secretView,
+        publicSpendKey: crypto.secretKeyToPublicKey(secretSpend),
+        publicViewKey: crypto.secretKeyToPublicKey(secretView),
+        type: 'address',
+      };
+    };
+    const subWallet = () => {
+      const secretView = crypto.randomScalar();
+      const publicSpendKey = crypto.secretKeyToPublicKey(crypto.randomScalar());
+      return {
+        secretView,
+        publicSpendKey,
+        publicViewKey: crypto.encodePoint(crypto.decodePoint(publicSpendKey).multiplyUnsafe(secretView)),
+        type: 'subaddress',
+      };
+    };
+    const makeInput = (amount) => {
+      const secretKey = crypto.randomScalar();
+      const mask = crypto.randomScalar();
+      return {
+        secretKey, amount, mask, commitment: ringct.pedersenCommitment(amount, mask), globalIndex: 1n, decoys: [],
+      };
+    };
+
+    // builds a real transaction for the full `outputs` list and returns the actual encoded
+    // tx_extra length, to cross-check estimateExtraSize against buildTxExtra.
+    function actualExtraSize(outputs) {
+      const sender = outputs.find((o) => o.isChange) ?? stdWallet();
+      const inputs = [makeInput(1000000n)];
+      const bytes = tx.createTransaction({
+        inputs, outputs, secretViewKey: sender.secretView,
+      });
+      return raw.transaction.decode(bytes).prefix.extra.length;
+    }
+
+    it('single standard destination + change: no additional keys, short nonce', () => {
+      const outputs = [{ ...stdWallet(), amount: 500000n }, {
+        ...stdWallet(), isChange: true, amount: 0n,
+      }];
+      const size = tx.estimateExtraSize(outputs);
+      assert.strictEqual(size, 44);
+      assert.strictEqual(size, actualExtraSize(outputs));
+    });
+
+    it('single subaddress destination + change: R = r*D, no additional keys', () => {
+      const outputs = [{ ...subWallet(), amount: 500000n }, {
+        ...stdWallet(), isChange: true, amount: 0n,
+      }];
+      const size = tx.estimateExtraSize(outputs);
+      assert.strictEqual(size, 44);
+      assert.strictEqual(size, actualExtraSize(outputs));
+    });
+
+    it('standard + subaddress destinations: needs additional keys', () => {
+      const outputs = [
+        { ...stdWallet(), amount: 300000n },
+        { ...subWallet(), amount: 200000n },
+        {
+          ...stdWallet(), isChange: true, amount: 0n,
+        },
+      ];
+      const size = tx.estimateExtraSize(outputs);
+      assert.strictEqual(size, 131); // 33 + (2 + 32*3) additional pubkeys, no nonce (3 outputs)
+      assert.strictEqual(size, actualExtraSize(outputs));
+    });
+
+    it('two standard destinations, no change: two outputs, dummy nonce', () => {
+      const outputs = [
+        { ...stdWallet(), amount: 300000n },
+        { ...stdWallet(), amount: 200000n },
+      ];
+      const size = tx.estimateExtraSize(outputs);
+      assert.strictEqual(size, 44); // 33 + dummy payment id nonce (<= 2 outputs)
+      assert.strictEqual(size, actualExtraSize(outputs));
+    });
+
+    it('integrated address destination: always includes the nonce', () => {
+      const outputs = [
+        {
+          ...stdWallet(), type: 'integratedaddress', paymentID: randomBytes(8), amount: 500000n,
+        },
+        {
+          ...stdWallet(), isChange: true, amount: 0n,
+        },
+      ];
+      const size = tx.estimateExtraSize(outputs);
+      assert.strictEqual(size, 44);
+      assert.strictEqual(size, actualExtraSize(outputs));
+    });
+  });
+
   describe('estimate tx size', () => {
     it('should estimate tx size with 1 in 2 out', () => {
       const size = tx.estimateTxSize(1, 10, 2, 44);
@@ -599,33 +695,33 @@ describe('tx', () => {
 
   describe('estimate tx fee', () => {
     it('should estimate tx fee with 1 in 2 out', () => {
-      const fee = tx.estimateFee(1, 15, 2, 44, 6836, 1, 10000);
-      assert.strictEqual(fee, '10510000');
+      const fee = tx.estimateFee(1, 15, 2, 44, 6836n, 1n, 10000n);
+      assert.strictEqual(fee, 10510000n);
     });
 
     it('should estimate tx fee with 2 in 2 out', () => {
-      const fee = tx.estimateFee(2, 15, 2, 44, 6836, 1, 10000);
-      assert.strictEqual(fee, '15150000');
+      const fee = tx.estimateFee(2, 15, 2, 44, 6836n, 1n, 10000n);
+      assert.strictEqual(fee, 15150000n);
     });
 
     it('should estimate tx fee with 3 in 3 out', () => {
-      const fee = tx.estimateFee(3, 15, 3, 44, 6836, 1, 10000);
-      assert.strictEqual(fee, '23910000');
+      const fee = tx.estimateFee(3, 15, 3, 44, 6836n, 1n, 10000n);
+      assert.strictEqual(fee, 23910000n);
     });
 
     it('should estimate tx fee with 1 in 2 out (bulletproof & clsag)', () => {
-      const fee = tx.estimateFee(1, 15, 2, 44, 6836, 1, 10000, true, true, false, false);
-      assert.strictEqual(fee, '11150000');
+      const fee = tx.estimateFee(1, 15, 2, 44, 6836n, 1n, 10000n, true, true, false, false);
+      assert.strictEqual(fee, 11150000n);
     });
 
     it('should estimate tx fee with 2 in 2 out (bulletproof & clsag)', () => {
-      const fee = tx.estimateFee(2, 15, 2, 44, 6836, 1, 10000, true, true, false, false);
-      assert.strictEqual(fee, '15790000');
+      const fee = tx.estimateFee(2, 15, 2, 44, 6836n, 1n, 10000n, true, true, false, false);
+      assert.strictEqual(fee, 15790000n);
     });
 
     it('should estimate tx fee with 3 in 3 out (bulletproof & clsag)', () => {
-      const fee = tx.estimateFee(3, 15, 3, 44, 6836, 1, 10000, true, true, false, false);
-      assert.strictEqual(fee, '25070000');
+      const fee = tx.estimateFee(3, 15, 3, 44, 6836n, 1n, 10000n, true, true, false, false);
+      assert.strictEqual(fee, 25070000n);
     });
   });
 

@@ -3,13 +3,19 @@ import assert from 'node:assert';
 import {
   before, describe, it,
 } from 'node:test';
-import { bytesToHex, hexToBytes } from '@noble/hashes/utils.js';
+import {
+  bytesToHex, hexToBytes, randomBytes,
+} from '@noble/hashes/utils.js';
 
 import * as crypto from '../lib/crypto.js';
 import * as helpers from '../lib/helpers.js';
+import * as raw from '../lib/raw.js';
 import * as ringct from '../lib/ringct.js';
+import * as tx from '../lib/tx.js';
 import * as wallet from '../lib/wallet.js';
 import { address } from '../lib/address.js';
+// https://github.com/monero-oxide/monero-oxide/blob/946ec5f00ff071b129758ee8cba5528539fccfe4/monero-oxide/wallet/src/tests/scan.rs#L17-L167
+import scanVector from './fixtures/monero_oxide_scan.json' with { type: 'json' };
 
 describe('wallet', () => {
   describe('keysFromSeed', () => {
@@ -205,6 +211,13 @@ describe('wallet', () => {
       assert.deepStrictEqual(owned.commitment, ringct.zeroCommit(600000000000n));
       assert.strictEqual(owned.keyImage.length, 32);
     });
+
+    it('finds the primary-key output despite a malformed additional public key', () => {
+      const keys = wallet.keysFromSeed(hexToBytes('8d8c8eeca38ac3b46aa293fd519b3860e96b5f873c12a95e3e1cdeda0bac4903'));
+      const output = { ...outputTo(keys, 4000000n), additionalPublicKey: new Uint8Array(32).fill(0xff) };
+      const owned = wallet.scanOutput(keys, output, wallet.subaddressLookup(keys, 1, 1));
+      assert.strictEqual(owned.amount, 4000000n);
+    });
   });
 
   describe('isMature', () => {
@@ -216,6 +229,175 @@ describe('wallet', () => {
     it('coinbase output needs COINBASE_UNLOCK_WINDOW (60) confirmations', () => {
       assert.strictEqual(wallet.isMature({ height: 100, isCoinbase: true }, 159), false);
       assert.strictEqual(wallet.isMature({ height: 100, isCoinbase: true }, 160), true);
+    });
+  });
+
+  describe('scanTransaction', () => {
+    // a fake spendable input, unrelated to the recipient being scanned for
+    const makeInput = (amount) => {
+      const secretKey = crypto.randomScalar();
+      const mask = crypto.randomScalar();
+      return {
+        secretKey, amount, mask, commitment: ringct.pedersenCommitment(amount, mask), globalIndex: 1n, decoys: [],
+      };
+    };
+
+    it('finds an owned output and the spent key image', () => {
+      const recipient = wallet.keysFromSeed(hexToBytes('8d8c8eeca38ac3b46aa293fd519b3860e96b5f873c12a95e3e1cdeda0bac4903'));
+      const sender = wallet.keysFromSeed(hexToBytes('9e9d9eeca38ac3b46aa293fd519b3860e96b5f873c12a95e3e1cdeda0bac4904'));
+      const input = makeInput(1000000n);
+      const bytes = tx.createTransaction({
+        inputs: [input],
+        outputs: [
+          {
+            type: 'address', publicSpendKey: recipient.publicSpendKey, publicViewKey: recipient.publicViewKey, amount: 700000n,
+          },
+          {
+            type: 'address', publicSpendKey: sender.publicSpendKey, publicViewKey: sender.publicViewKey, isChange: true, amount: 300000n,
+          },
+        ],
+        secretViewKey: helpers.decodeInt(sender.secretViewKey),
+      });
+      const decodedTx = raw.transaction.decode(bytes);
+      const subaddresses = wallet.subaddressLookup(recipient, 1, 1);
+
+      const result = wallet.scanTransaction(recipient, decodedTx, subaddresses);
+      assert.strictEqual(result.outputs.length, 1);
+      assert.strictEqual(result.outputs[0].amount, 700000n);
+      assert.strictEqual(result.outputs[0].index, 0);
+      assert.deepStrictEqual(result.outputs[0].subaddress, { major: 0, minor: 0 });
+
+      const expectedKeyImage = crypto.generateKeyImage(crypto.secretKeyToPublicKey(input.secretKey), input.secretKey);
+      assert.strictEqual(result.spentKeyImages.length, 1);
+      assert.deepStrictEqual(result.spentKeyImages[0], expectedKeyImage);
+    });
+
+    it('decrypts the payment id of an integrated-address output', () => {
+      const recipient = wallet.keysFromSeed(hexToBytes('8d8c8eeca38ac3b46aa293fd519b3860e96b5f873c12a95e3e1cdeda0bac4903'));
+      const paymentId = randomBytes(8);
+      const bytes = tx.createTransaction({
+        inputs: [makeInput(1000000n)],
+        outputs: [
+          {
+            type: 'integratedaddress', publicSpendKey: recipient.publicSpendKey, publicViewKey: recipient.publicViewKey, paymentID: paymentId, amount: 700000n,
+          },
+          {
+            type: 'address', publicSpendKey: recipient.publicSpendKey, publicViewKey: recipient.publicViewKey, isChange: true, amount: 300000n,
+          },
+        ],
+        secretViewKey: helpers.decodeInt(recipient.secretViewKey),
+      });
+      const decodedTx = raw.transaction.decode(bytes);
+      const subaddresses = wallet.subaddressLookup(recipient, 1, 1);
+
+      const result = wallet.scanTransaction(recipient, decodedTx, subaddresses);
+      const paid = result.outputs.find((o) => o.amount === 700000n);
+      assert.deepStrictEqual(paid.paymentId, paymentId);
+    });
+
+    it('finds nothing for an unrelated wallet', () => {
+      const recipient = wallet.keysFromSeed(hexToBytes('8d8c8eeca38ac3b46aa293fd519b3860e96b5f873c12a95e3e1cdeda0bac4903'));
+      const other = wallet.keysFromSeed(hexToBytes('1a2b3c4d5e38ac3b46aa293fd519b3860e96b5f873c12a95e3e1cdeda0bac490'));
+      const bytes = tx.createTransaction({
+        inputs: [makeInput(1000000n)],
+        outputs: [
+          {
+            type: 'address', publicSpendKey: other.publicSpendKey, publicViewKey: other.publicViewKey, amount: 700000n,
+          },
+          {
+            type: 'address', publicSpendKey: other.publicSpendKey, publicViewKey: other.publicViewKey, isChange: true, amount: 300000n,
+          },
+        ],
+        secretViewKey: helpers.decodeInt(other.secretViewKey),
+      });
+      const decodedTx = raw.transaction.decode(bytes);
+      const subaddresses = wallet.subaddressLookup(recipient, 1, 1);
+
+      const result = wallet.scanTransaction(recipient, decodedTx, subaddresses);
+      assert.strictEqual(result.outputs.length, 0);
+      assert.strictEqual(result.spentKeyImages.length, 1);
+    });
+
+    // independent cross-implementation vector (real serialized bytes, not a JS round-trip)
+    it('scans a real serialized tx from the monero-oxide vector', () => {
+      const keys = wallet.keysFromSecretKeys(
+        hexToBytes(scanVector.secretSpendKey),
+        hexToBytes(scanVector.secretViewKey)
+      );
+      const bytes = hexToBytes(scanVector.hex);
+      // pruned tx: decode the prefix and rct base directly (no signatures follow)
+      const prefix = raw.txPrefix.decode(bytes, { allowUnreadBytes: true });
+      const rctSigBase = raw.rctBase(prefix.vin.length, prefix.vout.length)
+        .decode(bytes.subarray(raw.txPrefix.encode(prefix).length), { allowUnreadBytes: true });
+      const subaddresses = wallet.subaddressLookup(keys, 1, 1);
+
+      const { outputs } = wallet.scanTransaction(keys, { prefix, rctSigBase }, subaddresses);
+      assert.strictEqual(outputs.length, 2);
+      outputs.forEach((output, i) => {
+        assert.strictEqual(output.index, scanVector.outputs[i].index);
+        assert.strictEqual(output.amount, BigInt(scanVector.outputs[i].amount));
+        assert.deepStrictEqual(helpers.encodeInt(output.mask), hexToBytes(scanVector.outputs[i].mask));
+        assert.deepStrictEqual(output.paymentId, new Uint8Array(8)); // dummy payment id
+      });
+    });
+  });
+
+  describe('isOwnKeyImage', () => {
+    it('true for a genuine spend of our own output', () => {
+      const keys = wallet.keysFromSeed(hexToBytes('8d8c8eeca38ac3b46aa293fd519b3860e96b5f873c12a95e3e1cdeda0bac4903'));
+      const txSecretKey = crypto.randomScalar();
+      const txPublicKey = crypto.secretKeyToPublicKey(txSecretKey);
+      const derivation = crypto.generateKeyDerivation(keys.publicViewKey, txSecretKey);
+      const { keyImage } = crypto.outputKeyImage(
+        helpers.decodeInt(keys.secretViewKey), helpers.decodeInt(keys.secretSpendKey), derivation, 0, { major: 0, minor: 0 }
+      );
+      assert.strictEqual(wallet.isOwnKeyImage(keys, {
+        txPublicKey, index: 0, subaddress: { major: 0, minor: 0 },
+      }, keyImage), true);
+    });
+
+    it('uses the additional tx public key for a subaddress output in a mixed transaction', () => {
+      const keys = wallet.keysFromSeed(hexToBytes('8d8c8eeca38ac3b46aa293fd519b3860e96b5f873c12a95e3e1cdeda0bac4903'));
+      const subaddress = { major: 0, minor: 1 };
+      const subaddressKeys = crypto.subaddressPublicKeys(
+        helpers.decodeInt(keys.secretViewKey), keys.publicSpendKey, subaddress
+      );
+      const other = wallet.randomKeys();
+      const generated = tx.generateOutputs([
+        {
+          type: 'address', publicSpendKey: other.publicSpendKey, publicViewKey: other.publicViewKey, amount: 1n,
+        },
+        {
+          type: 'subaddress', ...subaddressKeys, amount: 1n,
+        },
+      ], crypto.randomScalar());
+      const additionalPublicKey = generated.additionalPublicKeys[1];
+      const derivation = crypto.generateKeyDerivation(
+        additionalPublicKey, helpers.decodeInt(keys.secretViewKey)
+      );
+      const { keyImage } = crypto.outputKeyImage(
+        helpers.decodeInt(keys.secretViewKey),
+        helpers.decodeInt(keys.secretSpendKey),
+        derivation,
+        1,
+        subaddress
+      );
+
+      assert.strictEqual(wallet.isOwnKeyImage(keys, {
+        txPublicKey: generated.txPublicKey,
+        additionalPublicKey,
+        index: 1,
+        subaddress,
+      }, keyImage), true);
+    });
+
+    it('false for an unrelated key image (output used only as a ring decoy)', () => {
+      const keys = wallet.keysFromSeed(hexToBytes('8d8c8eeca38ac3b46aa293fd519b3860e96b5f873c12a95e3e1cdeda0bac4903'));
+      const txPublicKey = crypto.secretKeyToPublicKey(crypto.randomScalar());
+      const someoneElsesKeyImage = crypto.secretKeyToPublicKey(crypto.randomScalar());
+      assert.strictEqual(wallet.isOwnKeyImage(keys, {
+        txPublicKey, index: 0, subaddress: { major: 0, minor: 0 },
+      }, someoneElsesKeyImage), false);
     });
   });
 });

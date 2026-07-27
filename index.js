@@ -1,3 +1,4 @@
+export * as coinselect from './lib/coinselect.js';
 export * as crypto from './lib/crypto.js';
 export * as decoys from './lib/decoys.js';
 export * as epee from './lib/epee.js';
