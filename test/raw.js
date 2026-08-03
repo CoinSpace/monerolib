@@ -4,6 +4,7 @@ import { describe, it } from 'node:test';
 
 import * as raw from '../lib/raw.js';
 import blockFixtures from './fixtures/blocks.json' with { type: 'json' };
+import prunedTxFixture from './fixtures/monero_oxide_scan.json' with { type: 'json' };
 import txFixtures from './fixtures/txs.json' with { type: 'json' };
 
 describe('raw', () => {
@@ -103,6 +104,28 @@ describe('raw', () => {
           version: 3, unlockTime: 0n, vin: [], vout: [], extra: new Uint8Array(0),
         },
       }), /unsupported version/);
+    });
+  });
+
+  describe('prunedTransaction', () => {
+    // a real pruned (base-only) blob, as a prune=true node serves it
+    it('decodes and re-encodes a pruned blob byte-identically', () => {
+      const bytes = hexToBytes(prunedTxFixture.hex);
+      const decoded = raw.prunedTransaction.decode(bytes);
+      assert.ok(decoded.prefix && decoded.rctSigBase);
+      assert.equal(decoded.rctSigPrunable, undefined); // prunable part is dropped
+      assert.equal(bytesToHex(raw.prunedTransaction.encode(decoded)), prunedTxFixture.hex);
+    });
+
+    it('the full transaction codec over-reads a pruned blob', () => {
+      assert.throws(() => raw.transaction.decode(hexToBytes(prunedTxFixture.hex)));
+    });
+
+    it('version 1: prefix only, no signatures', () => {
+      const full = raw.transaction.decode(hexToBytes(txFixtures.find((t) => t.label.includes('v1')).hex));
+      const pruned = raw.prunedTransaction.encode({ prefix: full.prefix });
+      assert.deepEqual(pruned, raw.txPrefix.encode(full.prefix));
+      assert.deepEqual(raw.prunedTransaction.decode(pruned), { prefix: full.prefix });
     });
   });
 

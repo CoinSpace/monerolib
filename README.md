@@ -24,7 +24,7 @@ npm i monerolib
 | `decoys` | `gammaPicker` — decoy selection by the reference gamma distribution |
 | `coinselect` | `selectInputs` — input selection + fee/change estimation; a sweep target (no `amount`) reports the max sendable |
 | `helpers` | scalar encode/decode, `assertUint64` |
-| `raw` | wire serialization + tx/block typedefs |
+| `raw` | wire serialization + tx/block typedefs; `prunedTransaction` for pruned (base-only) blobs |
 | `epee` | monerod binary RPC format (`/getblocks.bin`) |
 
 Every function has JSDoc that links the exact monero v0.18.5.0 (and monero-oxide) source it ports.
