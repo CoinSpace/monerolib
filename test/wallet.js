@@ -154,16 +154,16 @@ describe('wallet', () => {
   });
 
   describe('scanOutput', () => {
-    // build an output paying `amount` to `keys`' main address, as a sender would
+    // build an output paying `amount` to `keys`' main address, as a sender would, plus the primary
+    // (tx public key) derivation a scanner shares across the tx
     function outputTo(keys, amount) {
       const txSecretKey = crypto.randomScalar();
-      const txPublicKey = crypto.secretKeyToPublicKey(txSecretKey); // R = r*G (normal address)
       const index = 0;
-      const derivation = crypto.generateKeyDerivation(keys.publicViewKey, txSecretKey); // 8*r*A
+      const derivation = crypto.generateKeyDerivation(keys.publicViewKey, txSecretKey); // 8*r*A = 8*a*R
       const amountKey = crypto.derivationToScalar(derivation, index);
       const mask = ringct.genCommitmentMask(amountKey);
-      return {
-        txPublicKey,
+      const output = {
+        txPublicKey: crypto.secretKeyToPublicKey(txSecretKey),
         outputKey: crypto.derivePublicKey(derivation, index, keys.publicSpendKey),
         index,
         ecdhInfo: {
@@ -172,11 +172,13 @@ describe('wallet', () => {
         outPk: ringct.pedersenCommitment(amount, mask),
         rctType: ringct.RCTTypes.CLSAG,
       };
+      return { output, derivation };
     }
 
     it('full wallet: detects the output with spend material', () => {
       const keys = wallet.keysFromSeed(hexToBytes('8d8c8eeca38ac3b46aa293fd519b3860e96b5f873c12a95e3e1cdeda0bac4903'));
-      const owned = wallet.scanOutput(keys, outputTo(keys, 4000000n), wallet.subaddressLookup(keys, 1, 1));
+      const { output, derivation } = outputTo(keys, 4000000n);
+      const owned = wallet.scanOutput(keys, output, wallet.subaddressLookup(keys, 1, 1), derivation);
       assert.strictEqual(owned.amount, 4000000n);
       assert.strictEqual(typeof owned.keyOffset, 'bigint');
       assert.strictEqual(owned.keyImage.length, 32);
@@ -185,7 +187,8 @@ describe('wallet', () => {
     it('view-only wallet: detects the output, amount and key offset, but no key image', () => {
       const keys = wallet.keysFromSeed(hexToBytes('8d8c8eeca38ac3b46aa293fd519b3860e96b5f873c12a95e3e1cdeda0bac4903'));
       const viewOnly = wallet.viewOnlyKeys(keys.publicSpendKey, keys.secretViewKey);
-      const owned = wallet.scanOutput(viewOnly, outputTo(keys, 4000000n), wallet.subaddressLookup(viewOnly, 1, 1));
+      const { output, derivation } = outputTo(keys, 4000000n);
+      const owned = wallet.scanOutput(viewOnly, output, wallet.subaddressLookup(viewOnly, 1, 1), derivation);
       assert.strictEqual(owned.amount, 4000000n);
       assert.strictEqual(typeof owned.keyOffset, 'bigint'); // view-only can produce the offset
       assert.strictEqual(owned.keyImage, undefined); // but not the key image (needs the spend key)
@@ -195,29 +198,91 @@ describe('wallet', () => {
     function coinbaseOutputTo(keys, amount) {
       const txSecretKey = crypto.randomScalar();
       const derivation = crypto.generateKeyDerivation(keys.publicViewKey, txSecretKey);
-      return {
-        txPublicKey: crypto.secretKeyToPublicKey(txSecretKey),
+      const output = {
         outputKey: crypto.derivePublicKey(derivation, 0, keys.publicSpendKey),
         index: 0,
         rctType: ringct.RCTTypes.Null,
         amount,
       };
+      return { output, derivation };
     }
 
     it('detects a coinbase output (cleartext amount, mask 1)', () => {
       const keys = wallet.keysFromSeed(hexToBytes('8d8c8eeca38ac3b46aa293fd519b3860e96b5f873c12a95e3e1cdeda0bac4903'));
-      const owned = wallet.scanOutput(keys, coinbaseOutputTo(keys, 600000000000n), wallet.subaddressLookup(keys, 1, 1));
+      const { output, derivation } = coinbaseOutputTo(keys, 600000000000n);
+      const owned = wallet.scanOutput(keys, output, wallet.subaddressLookup(keys, 1, 1), derivation);
       assert.strictEqual(owned.amount, 600000000000n);
       assert.strictEqual(owned.mask, 1n);
       assert.deepStrictEqual(owned.commitment, ringct.zeroCommit(600000000000n));
       assert.strictEqual(owned.keyImage.length, 32);
     });
 
-    it('finds the primary-key output despite a malformed additional public key', () => {
+    it('view tag gates the derivation: a match still finds, a mismatch returns null', () => {
       const keys = wallet.keysFromSeed(hexToBytes('8d8c8eeca38ac3b46aa293fd519b3860e96b5f873c12a95e3e1cdeda0bac4903'));
-      const output = { ...outputTo(keys, 4000000n), additionalPublicKey: new Uint8Array(32).fill(0xff) };
+      const { output, derivation } = outputTo(keys, 4000000n);
+      const viewTag = crypto.deriveViewTag(derivation, output.index)[0];
+      const subaddresses = wallet.subaddressLookup(keys, 1, 1);
+      assert.strictEqual(wallet.scanOutput(keys, { ...output, viewTag }, subaddresses, derivation).amount, 4000000n);
+      assert.strictEqual(wallet.scanOutput(keys, { ...output, viewTag: viewTag ^ 0xff }, subaddresses, derivation), null);
+    });
+
+    it('derives on the fly from the output tx public key when no primary derivation is given', () => {
+      const keys = wallet.keysFromSeed(hexToBytes('8d8c8eeca38ac3b46aa293fd519b3860e96b5f873c12a95e3e1cdeda0bac4903'));
+      const { output } = outputTo(keys, 4000000n); // output carries txPublicKey, no primary passed
       const owned = wallet.scanOutput(keys, output, wallet.subaddressLookup(keys, 1, 1));
       assert.strictEqual(owned.amount, 4000000n);
+    });
+
+    it('falls through to the additional key when the primary derivation does not match', () => {
+      const keys = wallet.keysFromSeed(hexToBytes('8d8c8eeca38ac3b46aa293fd519b3860e96b5f873c12a95e3e1cdeda0bac4903'));
+      const subaddress = { major: 0, minor: 1 };
+      const sub = crypto.subaddressPublicKeys(helpers.decodeInt(keys.secretViewKey), keys.publicSpendKey, subaddress);
+      const other = wallet.randomKeys();
+      // a mixed tx: a standard output to someone else (index 0) and our subaddress output (index 1),
+      // so the primary tx public key is not ours and only the additional key at index 1 matches
+      const generated = tx.generateOutputs([
+        {
+          type: 'address', publicSpendKey: other.publicSpendKey, publicViewKey: other.publicViewKey, amount: 1n,
+        },
+        {
+          type: 'subaddress', publicSpendKey: sub.publicSpendKey, publicViewKey: sub.publicViewKey, amount: 5n,
+        },
+      ], crypto.randomScalar());
+      const gen = generated.outputs[1];
+      const mask = ringct.genCommitmentMask(gen.amountKey);
+      const output = {
+        txPublicKey: generated.txPublicKey,
+        additionalPublicKey: generated.additionalPublicKeys[1],
+        outputKey: gen.key,
+        viewTag: gen.viewTag,
+        index: 1,
+        ecdhInfo: {
+          amount: ringct.ecdhEncode({ amount: helpers.encodeInt(5n) }, gen.amountKey, ringct.RCTTypes.CLSAG).amount.slice(0, 8),
+        },
+        outPk: ringct.pedersenCommitment(5n, mask),
+        rctType: ringct.RCTTypes.CLSAG,
+      };
+      const owned = wallet.scanOutput(keys, output, wallet.subaddressLookup(keys, 1, 2));
+      assert.strictEqual(owned.amount, 5n);
+      assert.deepStrictEqual(owned.subaddress, subaddress);
+    });
+
+    it('does not compute the additional-key derivation when the primary matches', () => {
+      const keys = wallet.keysFromSeed(hexToBytes('8d8c8eeca38ac3b46aa293fd519b3860e96b5f873c12a95e3e1cdeda0bac4903'));
+      const { output, derivation } = outputTo(keys, 4000000n); // primary derivation matches
+      // reading any byte of the additional key means its derivation was computed; an eager scan would
+      let additionalRead = false;
+      const additionalPublicKey = new Proxy(crypto.secretKeyToPublicKey(crypto.randomScalar()), {
+        get(target, prop, receiver) {
+          additionalRead = true;
+          return Reflect.get(target, prop, receiver);
+        },
+      });
+      const owned = wallet.scanOutput(
+        keys, { ...output, additionalPublicKey }, wallet.subaddressLookup(keys, 1, 1), derivation
+      );
+      assert.strictEqual(owned.amount, 4000000n);
+      assert.strictEqual(additionalRead, false);
     });
   });
 
@@ -574,6 +639,19 @@ describe('wallet', () => {
       assert.strictEqual(wallet.isOwnKeyImage(keys, {
         txPublicKey, index: 0, subaddress: { major: 0, minor: 0 },
       }, someoneElsesKeyImage), false);
+    });
+
+    it('matches through the primary key despite a malformed additional public key', () => {
+      const keys = wallet.keysFromSeed(hexToBytes('8d8c8eeca38ac3b46aa293fd519b3860e96b5f873c12a95e3e1cdeda0bac4903'));
+      const txSecretKey = crypto.randomScalar();
+      const txPublicKey = crypto.secretKeyToPublicKey(txSecretKey);
+      const derivation = crypto.generateKeyDerivation(keys.publicViewKey, txSecretKey);
+      const keyImage = crypto.outputKeyImage(
+        helpers.decodeInt(keys.secretViewKey), helpers.decodeInt(keys.secretSpendKey), derivation, 0, { major: 0, minor: 0 }
+      );
+      assert.strictEqual(wallet.isOwnKeyImage(keys, {
+        txPublicKey, additionalPublicKey: new Uint8Array(32).fill(0xff), index: 0, subaddress: { major: 0, minor: 0 },
+      }, keyImage), true);
     });
   });
 });
