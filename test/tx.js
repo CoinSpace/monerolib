@@ -346,7 +346,7 @@ describe('tx', () => {
         },
       ];
       const bytes = tx.createTransaction({
-        inputs, outputs, secretSpendKey: 0n, secretViewKey: sender.secretView,
+        inputs, outputs, secretSpendKey: 0n, secretViewKey: sender.secretView, shuffleOutputs: false, // output 0 stays the recipient
       });
 
       // serialization round-trips
@@ -420,6 +420,42 @@ describe('tx', () => {
       const bytes = tx.createTransaction(params);
       assert.ok(bytes instanceof Uint8Array);
       assert.equal(raw.transaction.decode(bytes).prefix.vin.length, 1);
+    });
+
+    it('shuffles the outputs by default (shuffle_outs), keeps the caller order with shuffleOutputs: false', () => {
+      const inputs = [makeInput(5000000n, 2)];
+      const sender = stdWallet();
+      const first = stdWallet();
+      const second = stdWallet();
+      const outputs = [
+        { ...first, amount: 1000000n },
+        { ...second, amount: 2000000n },
+        {
+          ...sender, isChange: true, amount: 1000000n,
+        },
+      ];
+      // the wallet whose keys reproduce the one-time key at vout[index]
+      const ownerOf = (decoded, index) => [first, second, sender].find((w) => {
+        const { txPublicKey } = tx.parseTxExtra(decoded.prefix.extra);
+        const derivation = crypto.generateKeyDerivation(txPublicKey, w.secretView);
+        return bytesToHex(crypto.derivePublicKey(derivation, index, w.publicSpendKey)) === bytesToHex(decoded.prefix.vout[index].target.data.key);
+      });
+      const build = (shuffleOutputs) => {
+        // constant random bytes make Fisher-Yates deterministic: j = 0x01010101 % (i + 1) is 1 for
+        // i = 2 and for i = 1, so [first, second, sender] becomes [first, sender, second]
+        crypto.__mockRandomBytes__((length) => new Uint8Array(length).fill(1));
+        try {
+          return raw.transaction.decode(tx.createTransaction({
+            inputs, outputs, secretSpendKey: 0n, secretViewKey: sender.secretView, shuffleOutputs,
+          }));
+        } finally {
+          crypto.__mockRandomBytes__(randomBytes);
+        }
+      };
+      const shuffled = build(true);
+      assert.deepStrictEqual([0, 1, 2].map((i) => ownerOf(shuffled, i)), [first, sender, second]);
+      const ordered = build(false);
+      assert.deepStrictEqual([0, 1, 2].map((i) => ownerOf(ordered, i)), [first, second, sender]);
     });
 
     it('rejects empty inputs', () => {

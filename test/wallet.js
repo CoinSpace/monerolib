@@ -325,6 +325,7 @@ describe('wallet', () => {
         ],
         secretSpendKey: 0n,
         secretViewKey: helpers.decodeInt(sender.secretViewKey),
+        shuffleOutputs: false, // the recipient output stays at index 0
       });
       const decodedTx = raw.transaction.decode(bytes);
       const subaddresses = wallet.subaddressLookup(recipient, 1, 1);
@@ -500,6 +501,7 @@ describe('wallet', () => {
         ],
         secretSpendKey: 0n,
         secretViewKey: helpers.decodeInt(keys.secretViewKey),
+        shuffleOutputs: false, // outputs[0] below must be the `amount` output, not the change
       });
       const owned = wallet.scanTransaction(keys, raw.transaction.decode(incoming), wallet.subaddressLookup(keys, 1, 1)).outputs[0];
       const decoys = Array.from({ length: 15 }, (unused, j) => ({
