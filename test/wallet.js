@@ -194,6 +194,13 @@ describe('wallet', () => {
       assert.strictEqual(owned.keyImage, undefined); // but not the key image (needs the spend key)
     });
 
+    it('skips an output whose commitment does not match the encrypted amount', () => {
+      const keys = wallet.keysFromSeed(hexToBytes('8d8c8eeca38ac3b46aa293fd519b3860e96b5f873c12a95e3e1cdeda0bac4903'));
+      const { output, derivation } = outputTo(keys, 4000000n);
+      output.outPk[0] ^= 1;
+      assert.strictEqual(wallet.scanOutput(keys, output, wallet.subaddressLookup(keys, 1, 1), derivation), null);
+    });
+
     // a coinbase output: not RingCT (Null type), cleartext amount, no ecdh/commitment
     function coinbaseOutputTo(keys, amount) {
       const txSecretKey = crypto.randomScalar();
