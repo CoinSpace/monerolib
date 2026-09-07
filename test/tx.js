@@ -18,13 +18,12 @@ describe('tx', () => {
 
   describe('parseTxExtra', () => {
 
-    const NIL = new Uint8Array(0);
     const NIL_TX_PUB_KEY = new Uint8Array(32);
     const TX_EXTRA_PADDING_MAX_COUNT = 255;
     const empty = {
-      txPublicKey: NIL_TX_PUB_KEY,
-      encryptedPaymentId: NIL,
+      txPublicKeys: [],
       additionalPublicKeys: [],
+      encryptedPaymentId: undefined,
     };
 
     it('should handle empty extra', () => {
@@ -66,7 +65,9 @@ describe('tx', () => {
     it('should handle pub key only', () => {
       const result = tx.parseTxExtra(Uint8Array.from([1, 30, 208, 98, 162, 133, 64, 85, 83, 112, 91, 188, 89, 211, 24, 131, 39, 154, 22, 228, 80, 63, 198, 141, 173, 111, 244, 183, 4, 149, 186, 140, 230]));
       assert.deepStrictEqual(result, {
-        txPublicKey: hexToBytes('1ed062a285405553705bbc59d31883279a16e4503fc68dad6ff4b70495ba8ce6'), encryptedPaymentId: NIL, additionalPublicKeys: [],
+        txPublicKeys: [hexToBytes('1ed062a285405553705bbc59d31883279a16e4503fc68dad6ff4b70495ba8ce6')],
+        additionalPublicKeys: [],
+        encryptedPaymentId: undefined,
       });
     });
 
@@ -81,7 +82,9 @@ describe('tx', () => {
         0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
         0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]));
       assert.deepStrictEqual(result, {
-        txPublicKey: hexToBytes('1ed062a285405553705bbc59d31883279a16e4503fc68dad6ff4b70495ba8ce6'), encryptedPaymentId: NIL, additionalPublicKeys: [],
+        txPublicKeys: [hexToBytes('1ed062a285405553705bbc59d31883279a16e4503fc68dad6ff4b70495ba8ce6')],
+        additionalPublicKeys: [],
+        encryptedPaymentId: undefined,
       });
     });
 
@@ -91,17 +94,24 @@ describe('tx', () => {
         1, 30, 208, 98, 162, 133, 64, 85, 83, 112, 91, 188, 89, 211, 24, 131, 39, 154, 22, 228,
         80, 63, 198, 141, 173, 111, 244, 183, 4, 149, 186, 140, 230]));
       assert.deepStrictEqual(result, {
-        txPublicKey: hexToBytes('1ed062a285405553705bbc59d31883279a16e4503fc68dad6ff4b70495ba8ce6'), encryptedPaymentId: NIL, additionalPublicKeys: [],
+        txPublicKeys: [
+          hexToBytes('1ed062a285405553705bbc59d31883279a16e4503fc68dad6ff4b70495ba8ce6'),
+          hexToBytes('1ed062a285405553705bbc59d31883279a16e4503fc68dad6ff4b70495ba8ce6'),
+        ],
+        additionalPublicKeys: [],
+        encryptedPaymentId: undefined,
       });
     });
 
-    it('should keep the first txPublicKey even if it is all zeroes', () => {
+    it('should keep an all-zero tx public key', () => {
       const result = tx.parseTxExtra(Uint8Array.from([
         1, ...new Uint8Array(32),
         1, ...new Uint8Array(32).fill(1),
       ]));
       assert.deepStrictEqual(result, {
-        txPublicKey: NIL_TX_PUB_KEY, encryptedPaymentId: NIL, additionalPublicKeys: [],
+        txPublicKeys: [NIL_TX_PUB_KEY, new Uint8Array(32).fill(1)],
+        additionalPublicKeys: [],
+        encryptedPaymentId: undefined,
       });
     });
 
@@ -126,7 +136,9 @@ describe('tx', () => {
         80, 63, 198, 141, 173, 111, 244, 183, 4, 149, 186, 140, 230,
         2, 9, 1, 0, 0, 0, 0, 0, 0, 0, 0]));
       assert.deepStrictEqual(result, {
-        txPublicKey: hexToBytes('1ed062a285405553705bbc59d31883279a16e4503fc68dad6ff4b70495ba8ce6'), encryptedPaymentId: hexToBytes('0000000000000000'), additionalPublicKeys: [],
+        txPublicKeys: [hexToBytes('1ed062a285405553705bbc59d31883279a16e4503fc68dad6ff4b70495ba8ce6')],
+        encryptedPaymentId: hexToBytes('0000000000000000'),
+        additionalPublicKeys: [],
       });
     });
 
@@ -135,7 +147,9 @@ describe('tx', () => {
         1, 30, 208, 98, 162, 133, 64, 85, 83, 112, 91, 188, 89, 211, 24, 131, 39, 154, 22, 228,
         80, 63, 198, 141, 173, 111, 244, 183, 4, 149, 186, 140, 230]));
       assert.deepStrictEqual(result, {
-        txPublicKey: hexToBytes('1ed062a285405553705bbc59d31883279a16e4503fc68dad6ff4b70495ba8ce6'), encryptedPaymentId: hexToBytes('0000000000000000'), additionalPublicKeys: [],
+        txPublicKeys: [hexToBytes('1ed062a285405553705bbc59d31883279a16e4503fc68dad6ff4b70495ba8ce6')],
+        encryptedPaymentId: hexToBytes('0000000000000000'),
+        additionalPublicKeys: [],
       });
     });
 
@@ -145,13 +159,13 @@ describe('tx', () => {
         203, 88, 114, 182, 252, 34, 40, 121, 144, 46, 219, 231, 163, 204, 184, 50, 120, 200, 42, 95, 173, 9, 124, 207, 193, 216, 157, 94, 95, 186, 83, 166, 138, 35, 130, 57, 235, 213, 246, 13, 96,
         50, 125, 34, 218, 62, 233, 90, 156, 7, 6, 116, 234, 82, 90]));
       assert.deepStrictEqual(result, {
-        txPublicKey: hexToBytes('3b3625cfb65842fc3e445245908f9b171b4e1899543fb70d85424fd9b1c95eb9'),
-        encryptedPaymentId: NIL,
+        txPublicKeys: [hexToBytes('3b3625cfb65842fc3e445245908f9b171b4e1899543fb70d85424fd9b1c95eb9')],
         additionalPublicKeys: [
           hexToBytes('fc1776e142ade7a4ad5e00bd27a480013f06c45d5ac80807d3609500bdd26cf2'),
           hexToBytes('98705ffac66ef63d67cb5872b6fc222879902edbe7a3ccb83278c82a5fad097c'),
           hexToBytes('cfc1d89d5e5fba53a68a238239ebd5f60d60327d22da3ee95a9c070674ea525a'),
         ],
+        encryptedPaymentId: undefined,
       });
     });
   });
@@ -164,7 +178,7 @@ describe('tx', () => {
       const parsed = tx.parseTxExtra(tx.buildTxExtra({
         txPublicKey, additionalPublicKeys, encryptedPaymentId,
       }));
-      assert.deepStrictEqual(parsed.txPublicKey, txPublicKey);
+      assert.deepStrictEqual(parsed.txPublicKeys, [txPublicKey]);
       assert.deepStrictEqual(parsed.additionalPublicKeys, additionalPublicKeys);
       assert.deepStrictEqual(parsed.encryptedPaymentId, encryptedPaymentId);
     });
@@ -172,9 +186,9 @@ describe('tx', () => {
     it('omits optional fields when not given', () => {
       const txPublicKey = crypto.secretKeyToPublicKey(crypto.randomScalar());
       const parsed = tx.parseTxExtra(tx.buildTxExtra({ txPublicKey }));
-      assert.deepStrictEqual(parsed.txPublicKey, txPublicKey);
+      assert.deepStrictEqual(parsed.txPublicKeys, [txPublicKey]);
       assert.deepStrictEqual(parsed.additionalPublicKeys, []);
-      assert.deepStrictEqual(parsed.encryptedPaymentId, new Uint8Array(0));
+      assert.strictEqual(parsed.encryptedPaymentId, undefined);
     });
   });
 
@@ -388,7 +402,7 @@ describe('tx', () => {
       });
 
       // the recipient (output 0) can decode the amount and the commitment matches
-      const { txPublicKey } = tx.parseTxExtra(decoded.prefix.extra);
+      const [txPublicKey] = tx.parseTxExtra(decoded.prefix.extra).txPublicKeys;
       const derivation = crypto.generateKeyDerivation(txPublicKey, recipient.secretView);
       const ecdh = ringct.decodeRct(decoded.rctSigBase.ecdhInfo[0], outPk[0], 6, 0, derivation);
       assert.equal(ecdh.amount, 4000000n);
@@ -436,7 +450,7 @@ describe('tx', () => {
       ];
       // the wallet whose keys reproduce the one-time key at vout[index]
       const ownerOf = (decoded, index) => [first, second, sender].find((w) => {
-        const { txPublicKey } = tx.parseTxExtra(decoded.prefix.extra);
+        const [txPublicKey] = tx.parseTxExtra(decoded.prefix.extra).txPublicKeys;
         const derivation = crypto.generateKeyDerivation(txPublicKey, w.secretView);
         return bytesToHex(crypto.derivePublicKey(derivation, index, w.publicSpendKey)) === bytesToHex(decoded.prefix.vout[index].target.data.key);
       });
@@ -512,7 +526,7 @@ describe('tx', () => {
       const bytes = tx.createTransaction({
         inputs, outputs, secretSpendKey: 0n,
       });
-      const { encryptedPaymentId, txPublicKey } = tx.parseTxExtra(raw.transaction.decode(bytes).prefix.extra);
+      const { encryptedPaymentId, txPublicKeys: [txPublicKey] } = tx.parseTxExtra(raw.transaction.decode(bytes).prefix.extra);
       assert.equal(encryptedPaymentId.length, 8);
       // the integrated recipient recovers its id; the other recipient is unaffected
       assert.deepStrictEqual(tx.encryptPaymentId(encryptedPaymentId, txPublicKey, integrated.secretView), paymentId);
@@ -547,7 +561,7 @@ describe('tx', () => {
       const bytes = tx.createTransaction({
         inputs, outputs, secretSpendKey: 0n, secretViewKey: sender.secretView,
       });
-      const { encryptedPaymentId, txPublicKey } = tx.parseTxExtra(raw.transaction.decode(bytes).prefix.extra);
+      const { encryptedPaymentId, txPublicKeys: [txPublicKey] } = tx.parseTxExtra(raw.transaction.decode(bytes).prefix.extra);
       assert.equal(encryptedPaymentId.length, 8);
       // the recipient recovers it with the tx pub key and its own view secret
       assert.deepStrictEqual(tx.encryptPaymentId(encryptedPaymentId, txPublicKey, recipient.secretView), paymentId);

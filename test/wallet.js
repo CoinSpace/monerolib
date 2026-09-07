@@ -348,6 +348,33 @@ describe('wallet', () => {
       assert.deepStrictEqual(result.spentKeyImages[0], expectedKeyImage);
     });
 
+    it('finds an output paid through the second of two tx public keys', () => {
+      const recipient = wallet.keysFromSeed(hexToBytes('8d8c8eeca38ac3b46aa293fd519b3860e96b5f873c12a95e3e1cdeda0bac4903'));
+      const sender = wallet.keysFromSeed(hexToBytes('9e9d9eeca38ac3b46aa293fd519b3860e96b5f873c12a95e3e1cdeda0bac4904'));
+      const decodedTx = raw.transaction.decode(tx.createTransaction({
+        inputs: [makeInput(1000000n)],
+        outputs: [
+          {
+            type: 'address', publicSpendKey: recipient.publicSpendKey, publicViewKey: recipient.publicViewKey, amount: 700000n,
+          },
+          {
+            type: 'address', publicSpendKey: sender.publicSpendKey, publicViewKey: sender.publicViewKey, isChange: true, amount: 300000n,
+          },
+        ],
+        secretSpendKey: 0n,
+        secretViewKey: helpers.decodeInt(sender.secretViewKey),
+      }));
+      // a stray tx public key field before the real one, as the 2016 cold-signing bug wrote them
+      const stray = crypto.secretKeyToPublicKey(crypto.randomScalar());
+      decodedTx.prefix.extra = Uint8Array.from([1, ...stray, ...decodedTx.prefix.extra]);
+
+      const result = wallet.scanTransaction(recipient, decodedTx, wallet.subaddressLookup(recipient, 1, 1));
+      assert.strictEqual(result.outputs.length, 1);
+      assert.strictEqual(result.outputs[0].amount, 700000n);
+      // the dummy payment id decrypts with the real key, not the stray one
+      assert.deepStrictEqual(result.outputs[0].paymentId, new Uint8Array(8));
+    });
+
     it('decrypts the payment id of an integrated-address output', () => {
       const recipient = wallet.keysFromSeed(hexToBytes('8d8c8eeca38ac3b46aa293fd519b3860e96b5f873c12a95e3e1cdeda0bac4903'));
       const paymentId = randomBytes(8);

@@ -6,7 +6,6 @@ import * as crypto from '../lib/crypto.js';
 import { gammaPicker } from '../lib/decoys.js';
 
 describe('decoys', () => {
-  // 300000 blocks with 5 rct outputs each: cumulative offsets 5, 10, 15, ...
   const rctOffsets = Array.from({ length: 300000 }, (unused, i) => (i + 1) * 5);
   // outputs in the last SPENDABLE_AGE - 1 blocks are never picked
   const numRctOutputs = rctOffsets[rctOffsets.length - 10];
