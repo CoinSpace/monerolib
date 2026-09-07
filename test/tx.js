@@ -417,6 +417,19 @@ describe('tx', () => {
       }), /wrong spend key/);
     });
 
+    it('rejects the same input twice and a duplicate ring member', () => {
+      const input = makeInput(5000000n);
+      const outputs = [{ ...stdWallet(), amount: 1000000n }, { ...stdWallet(), amount: 1000000n }];
+      assert.throws(() => tx.createTransaction({
+        inputs: [input, input], outputs, secretSpendKey: 0n,
+      }), /duplicate input/);
+      const decoys = [...input.decoys];
+      decoys[0] = { ...decoys[0], globalIndex: decoys[1].globalIndex };
+      assert.throws(() => tx.createTransaction({
+        inputs: [{ ...input, decoys }], outputs, secretSpendKey: 0n,
+      }), /duplicate ring member/);
+    });
+
     it('prepareTransaction returns the tx object, createTransaction returns its bytes', () => {
       const inputs = [makeInput(5010000n)];
       const sender = stdWallet();
