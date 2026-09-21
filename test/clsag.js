@@ -83,7 +83,7 @@ describe('clsag', () => {
   });
 
   it('verifies the fixed monero-oxide CLSAG tx vector', () => {
-    const parsed = raw.transaction.decode(hexToBytes(clsagTx.hex));
+    const parsed = raw.fullTransaction.decode(hexToBytes(clsagTx.hex));
     const message = tx.getPreMlsagHash(
       crypto.fastHash(raw.txPrefix.encode(parsed.prefix)),
       parsed.rctSigBase,

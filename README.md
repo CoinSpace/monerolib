@@ -24,7 +24,7 @@ npm i monerolib
 | `decoys` | `gammaPicker` — decoy selection by the reference gamma distribution |
 | `coinselect` | `selectInputs` — input selection + fee/change estimation; a sweep target (no `amount`) reports the max sendable |
 | `helpers` | scalar encode/decode, `assertUint64` |
-| `raw` | wire serialization + tx/block typedefs; `prunedTransaction` for pruned (base-only) blobs |
+| `raw` | wire serialization + tx/block typedefs; `fullTransaction` for full blobs, `prunedTransaction` for pruned (base-only) blobs; coder factories use the `Coder` suffix |
 | `epee` | monerod binary RPC format (`/getblocks.bin`) |
 
 Every function has JSDoc that links the exact monero v0.18.5.0 (and monero-oxide) source it ports.
@@ -53,16 +53,15 @@ const { fee, sweepAmount } = coinselect.selectInputs({
   ringSize: 16, baseFee, feeQuantization,
 });
 
-// create + sign — picks inputs, appends change/dummy; returns the decoded tx and its hex
-const { json, hex } = wallet.createTransaction({
+// Picks inputs and adds change or a dummy output.
+const { transaction, bytes, txKeys } = wallet.createTransaction({
   inputs,
   outputs: [{ ...address('mainnet').decode(recipient), amount }],
   keys, baseFee, feeQuantization,
 });
 ```
 
-`wallet.createTransaction` is the high-level builder; `tx.prepareTransaction` / `tx.createTransaction`
-are the low-level primitives (exact `inputs`/`outputs`, see the typedefs in `lib/tx.js`).
+`wallet.createTransaction` is the high-level builder; `tx.prepareTransaction` / `tx.createTransaction` are the low-level primitives (exact `inputs`/`outputs`, see the typedefs in `lib/tx.js`).
 
 ## Tests
 

@@ -124,7 +124,7 @@ describe('ringct', () => {
       const bytes = hexToBytes(scanVector.hex);
       const prefix = raw.txPrefix.decode(bytes, { allowUnreadBytes: true });
       const prefixBytes = raw.txPrefix.encode(prefix);
-      const rctSigBase = raw.rctBase(prefix.vin.length, prefix.vout.length)
+      const rctSigBase = raw.rctBaseCoder(prefix.vin.length, prefix.vout.length)
         .decode(bytes.subarray(prefixBytes.length), { allowUnreadBytes: true });
       const [txPublicKey] = tx.parseTxExtra(prefix.extra).txPublicKeys;
       const derivation = crypto.generateKeyDerivation(

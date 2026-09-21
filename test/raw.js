@@ -75,31 +75,31 @@ describe('raw', () => {
     });
   });
 
-  describe('rctBase', () => {
+  describe('rctBaseCoder', () => {
     it('rejects an unknown rct type', () => {
-      assert.throws(() => raw.rctBase(1, 1).decode(Uint8Array.of(99)));
+      assert.throws(() => raw.rctBaseCoder(1, 1).decode(Uint8Array.of(99)));
     });
   });
 
-  describe('rctPrunable', () => {
+  describe('rctPrunableCoder', () => {
     it('rejects an unknown rct type', () => {
-      assert.throws(() => raw.rctPrunable(99, 1, 1, 10).decode(new Uint8Array(0)));
+      assert.throws(() => raw.rctPrunableCoder(99, 1, 1, 10).decode(new Uint8Array(0)));
     });
   });
 
-  // txPrefix and rctPrunable are exercised by the full transaction round-trip below
-  describe('transaction', () => {
+  // txPrefix and rctPrunableCoder are exercised by the full transaction round-trip below
+  describe('fullTransaction', () => {
     it('decodes and re-encodes whole real transactions byte-identically', () => {
       for (const { hex } of txFixtures) {
-        assert.equal(bytesToHex(raw.transaction.encode(raw.transaction.decode(hexToBytes(hex)))), hex);
+        assert.equal(bytesToHex(raw.fullTransaction.encode(raw.fullTransaction.decode(hexToBytes(hex)))), hex);
       }
     });
 
     it('rejects transaction versions other than 1 or 2', () => {
       // v3 blob that previously round-tripped as if it were RingCT v2
-      assert.throws(() => raw.transaction.decode(hexToBytes('030001ff00000000')), /unsupported version/);
+      assert.throws(() => raw.fullTransaction.decode(hexToBytes('030001ff00000000')), /unsupported version/);
       // and on encode
-      assert.throws(() => raw.transaction.encode({
+      assert.throws(() => raw.fullTransaction.encode({
         prefix: {
           version: 3, unlockTime: 0n, vin: [], vout: [], extra: new Uint8Array(0),
         },
@@ -118,11 +118,11 @@ describe('raw', () => {
     });
 
     it('the full transaction codec over-reads a pruned blob', () => {
-      assert.throws(() => raw.transaction.decode(hexToBytes(prunedTxFixture.hex)));
+      assert.throws(() => raw.fullTransaction.decode(hexToBytes(prunedTxFixture.hex)));
     });
 
     it('version 1: prefix only, no signatures', () => {
-      const full = raw.transaction.decode(hexToBytes(txFixtures.find((t) => t.label.includes('v1')).hex));
+      const full = raw.fullTransaction.decode(hexToBytes(txFixtures.find((t) => t.label.includes('v1')).hex));
       const pruned = raw.prunedTransaction.encode({ prefix: full.prefix });
       assert.deepEqual(pruned, raw.txPrefix.encode(full.prefix));
       assert.deepEqual(raw.prunedTransaction.decode(pruned), { prefix: full.prefix });

@@ -153,8 +153,8 @@ describe('bulletproofs plus', () => {
 
     // non-canonical scalars in an original Bulletproof (taken from a real on-chain proof)
     it('rejects non-canonical scalars in an original Bulletproof', () => {
-      const item = txs.find((t) => [3, 4].includes(raw.transaction.decode(hexToBytes(t.hex)).rctSigBase?.type));
-      const tx = raw.transaction.decode(hexToBytes(item.hex));
+      const item = txs.find((t) => [3, 4].includes(raw.fullTransaction.decode(hexToBytes(t.hex)).rctSigBase?.type));
+      const tx = raw.fullTransaction.decode(hexToBytes(item.hex));
       const proof = tx.rctSigPrunable.bulletproofs[0];
       const { outPk } = tx.rctSigBase;
       assert.ok(bulletproofs.verifyBulletproof(outPk, proof));
@@ -192,7 +192,7 @@ describe('bulletproofs plus', () => {
   // byte-exact KAT: verify real on-chain proofs (the commitments are outPk masks)
   describe('verifies real on-chain proofs', () => {
     for (const item of txs) {
-      const tx = raw.transaction.decode(hexToBytes(item.hex));
+      const tx = raw.fullTransaction.decode(hexToBytes(item.hex));
       if (!tx.rctSigBase) continue; // skip v1 (legacy, no RingCT base)
       const { type, outPk } = tx.rctSigBase;
       if (type === 3 || type === 4) { // Bulletproof / Bulletproof2

@@ -254,12 +254,12 @@ describe('wallet', () => {
         {
           type: 'subaddress', publicSpendKey: sub.publicSpendKey, publicViewKey: sub.publicViewKey, amount: 5n,
         },
-      ], crypto.randomScalar());
+      ], { txSecretKey: crypto.randomScalar() });
       const gen = generated.outputs[1];
       const mask = ringct.genCommitmentMask(gen.amountKey);
       const output = {
-        txPublicKey: generated.txPublicKey,
-        additionalPublicKey: generated.additionalPublicKeys[1],
+        txPublicKey: generated.txKeys.txPublicKey,
+        additionalTxPublicKey: generated.txKeys.additionalTxPublicKeys[1],
         outputKey: gen.key,
         viewTag: gen.viewTag,
         index: 1,
@@ -279,14 +279,14 @@ describe('wallet', () => {
       const { output, derivation } = outputTo(keys, 4000000n); // primary derivation matches
       // reading any byte of the additional key means its derivation was computed; an eager scan would
       let additionalRead = false;
-      const additionalPublicKey = new Proxy(crypto.secretKeyToPublicKey(crypto.randomScalar()), {
+      const additionalTxPublicKey = new Proxy(crypto.secretKeyToPublicKey(crypto.randomScalar()), {
         get(target, prop, receiver) {
           additionalRead = true;
           return Reflect.get(target, prop, receiver);
         },
       });
       const owned = wallet.scanOutput(
-        keys, { ...output, additionalPublicKey }, wallet.subaddressLookup(keys, 1, 1), derivation
+        keys, { ...output, additionalTxPublicKey }, wallet.subaddressLookup(keys, 1, 1), derivation
       );
       assert.strictEqual(owned.amount, 4000000n);
       assert.strictEqual(additionalRead, false);
@@ -320,7 +320,7 @@ describe('wallet', () => {
       const recipient = wallet.keysFromSeed(hexToBytes('8d8c8eeca38ac3b46aa293fd519b3860e96b5f873c12a95e3e1cdeda0bac4903'));
       const sender = wallet.keysFromSeed(hexToBytes('9e9d9eeca38ac3b46aa293fd519b3860e96b5f873c12a95e3e1cdeda0bac4904'));
       const input = makeInput(1000000n);
-      const bytes = tx.createTransaction({
+      const { bytes } = tx.createTransaction({
         inputs: [input],
         outputs: [
           {
@@ -334,7 +334,7 @@ describe('wallet', () => {
         secretViewKey: helpers.decodeInt(sender.secretViewKey),
         shuffleOutputs: false, // the recipient output stays at index 0
       });
-      const decodedTx = raw.transaction.decode(bytes);
+      const decodedTx = raw.fullTransaction.decode(bytes);
       const subaddresses = wallet.subaddressLookup(recipient, 1, 1);
 
       const result = wallet.scanTransaction(recipient, decodedTx, subaddresses);
@@ -351,7 +351,7 @@ describe('wallet', () => {
     it('finds an output paid through the second of two tx public keys', () => {
       const recipient = wallet.keysFromSeed(hexToBytes('8d8c8eeca38ac3b46aa293fd519b3860e96b5f873c12a95e3e1cdeda0bac4903'));
       const sender = wallet.keysFromSeed(hexToBytes('9e9d9eeca38ac3b46aa293fd519b3860e96b5f873c12a95e3e1cdeda0bac4904'));
-      const decodedTx = raw.transaction.decode(tx.createTransaction({
+      const decodedTx = raw.fullTransaction.decode(tx.createTransaction({
         inputs: [makeInput(1000000n)],
         outputs: [
           {
@@ -363,7 +363,7 @@ describe('wallet', () => {
         ],
         secretSpendKey: 0n,
         secretViewKey: helpers.decodeInt(sender.secretViewKey),
-      }));
+      }).bytes);
       // a stray tx public key field before the real one, as the 2016 cold-signing bug wrote them
       const stray = crypto.secretKeyToPublicKey(crypto.randomScalar());
       decodedTx.prefix.extra = Uint8Array.from([1, ...stray, ...decodedTx.prefix.extra]);
@@ -378,7 +378,7 @@ describe('wallet', () => {
     it('decrypts the payment id of an integrated-address output', () => {
       const recipient = wallet.keysFromSeed(hexToBytes('8d8c8eeca38ac3b46aa293fd519b3860e96b5f873c12a95e3e1cdeda0bac4903'));
       const paymentId = randomBytes(8);
-      const bytes = tx.createTransaction({
+      const { bytes } = tx.createTransaction({
         inputs: [makeInput(1000000n)],
         outputs: [
           {
@@ -391,7 +391,7 @@ describe('wallet', () => {
         secretSpendKey: 0n,
         secretViewKey: helpers.decodeInt(recipient.secretViewKey),
       });
-      const decodedTx = raw.transaction.decode(bytes);
+      const decodedTx = raw.fullTransaction.decode(bytes);
       const subaddresses = wallet.subaddressLookup(recipient, 1, 1);
 
       const result = wallet.scanTransaction(recipient, decodedTx, subaddresses);
@@ -402,7 +402,7 @@ describe('wallet', () => {
     it('finds nothing for an unrelated wallet', () => {
       const recipient = wallet.keysFromSeed(hexToBytes('8d8c8eeca38ac3b46aa293fd519b3860e96b5f873c12a95e3e1cdeda0bac4903'));
       const other = wallet.keysFromSeed(hexToBytes('1a2b3c4d5e38ac3b46aa293fd519b3860e96b5f873c12a95e3e1cdeda0bac490'));
-      const bytes = tx.createTransaction({
+      const { bytes } = tx.createTransaction({
         inputs: [makeInput(1000000n)],
         outputs: [
           {
@@ -415,7 +415,7 @@ describe('wallet', () => {
         secretSpendKey: 0n,
         secretViewKey: helpers.decodeInt(other.secretViewKey),
       });
-      const decodedTx = raw.transaction.decode(bytes);
+      const decodedTx = raw.fullTransaction.decode(bytes);
       const subaddresses = wallet.subaddressLookup(recipient, 1, 1);
 
       const result = wallet.scanTransaction(recipient, decodedTx, subaddresses);
@@ -432,7 +432,7 @@ describe('wallet', () => {
       const bytes = hexToBytes(scanVector.hex);
       // pruned tx: decode the prefix and rct base directly (no signatures follow)
       const prefix = raw.txPrefix.decode(bytes, { allowUnreadBytes: true });
-      const rctSigBase = raw.rctBase(prefix.vin.length, prefix.vout.length)
+      const rctSigBase = raw.rctBaseCoder(prefix.vin.length, prefix.vout.length)
         .decode(bytes.subarray(raw.txPrefix.encode(prefix).length), { allowUnreadBytes: true });
       const subaddresses = wallet.subaddressLookup(keys, 1, 1);
 
@@ -450,7 +450,7 @@ describe('wallet', () => {
     it('spends a scanned output with a non-zero spend key, signing against the real output key', () => {
       const keys = wallet.keysFromSeed(hexToBytes('8d8c8eeca38ac3b46aa293fd519b3860e96b5f873c12a95e3e1cdeda0bac4903'));
       // an incoming tx to our main address; scan it for keyOffset, publicKey and keyImage (real b)
-      const incoming = tx.createTransaction({
+      const { bytes: incoming } = tx.createTransaction({
         inputs: [makeInput(2000000n)],
         outputs: [
           {
@@ -463,7 +463,7 @@ describe('wallet', () => {
         secretSpendKey: 0n,
         secretViewKey: helpers.decodeInt(keys.secretViewKey),
       });
-      const owned = wallet.scanTransaction(keys, raw.transaction.decode(incoming), wallet.subaddressLookup(keys, 1, 1)).outputs[0];
+      const owned = wallet.scanTransaction(keys, raw.fullTransaction.decode(incoming), wallet.subaddressLookup(keys, 1, 1)).outputs[0];
 
       // spend it: signing reconstructs x = keyOffset + b with a non-zero b
       const decoys = Array.from({ length: 10 }, (unused, j) => ({
@@ -472,7 +472,7 @@ describe('wallet', () => {
         globalIndex: BigInt(2000 + j),
       }));
       const recipient = wallet.keysFromSeed(hexToBytes('9e9d9eeca38ac3b46aa293fd519b3860e96b5f873c12a95e3e1cdeda0bac4904'));
-      const spend = raw.transaction.decode(tx.createTransaction({
+      const spend = raw.fullTransaction.decode(tx.createTransaction({
         inputs: [{
           ...owned, globalIndex: 42n, decoys,
         }],
@@ -486,7 +486,7 @@ describe('wallet', () => {
         ],
         secretSpendKey: helpers.decodeInt(keys.secretSpendKey),
         secretViewKey: helpers.decodeInt(keys.secretViewKey),
-      }));
+      }).bytes);
 
       // the key image matches the one scanOutput computed (proves x = keyOffset + b)
       assert.deepStrictEqual(spend.prefix.vin[0].data.keyImage, owned.keyImage);
@@ -523,7 +523,7 @@ describe('wallet', () => {
 
     // a real spendable input of `amount` owned by `keys`: send it to the wallet, scan it, attach a ring
     const spendable = (keys, amount) => {
-      const incoming = tx.createTransaction({
+      const { bytes: incoming } = tx.createTransaction({
         inputs: [makeInput(amount + 2000000n)],
         outputs: [
           {
@@ -537,7 +537,7 @@ describe('wallet', () => {
         secretViewKey: helpers.decodeInt(keys.secretViewKey),
         shuffleOutputs: false, // outputs[0] below must be the `amount` output, not the change
       });
-      const owned = wallet.scanTransaction(keys, raw.transaction.decode(incoming), wallet.subaddressLookup(keys, 1, 1)).outputs[0];
+      const owned = wallet.scanTransaction(keys, raw.fullTransaction.decode(incoming), wallet.subaddressLookup(keys, 1, 1)).outputs[0];
       const decoys = Array.from({ length: 15 }, (unused, j) => ({
         publicKey: crypto.secretKeyToPublicKey(crypto.randomScalar()),
         commitment: crypto.secretKeyToPublicKey(crypto.randomScalar()),
@@ -568,7 +568,9 @@ describe('wallet', () => {
       const keys = wallet.keysFromSeed(hexToBytes('8d8c8eeca38ac3b46aa293fd519b3860e96b5f873c12a95e3e1cdeda0bac4903'));
       const recipient = wallet.keysFromSeed(hexToBytes('9e9d9eeca38ac3b46aa293fd519b3860e96b5f873c12a95e3e1cdeda0bac4904'));
       const input = spendable(keys, 5000000n);
-      const { json: decoded, hex } = wallet.createTransaction({
+      const {
+        transaction: decoded, bytes, txKeys: { txSecretKey, additionalTxSecretKeys },
+      } = wallet.createTransaction({
         inputs: [input],
         outputs: [{
           type: 'address', publicSpendKey: recipient.publicSpendKey, publicViewKey: recipient.publicViewKey, amount: 1000000n,
@@ -576,8 +578,14 @@ describe('wallet', () => {
         keys,
         baseFee: BASE_FEE,
         feeQuantization: FEE_QUANTIZATION,
+        txKeys: { additionalTxSecretKeys: [] },
       });
-      assert.strictEqual(hex, bytesToHex(raw.transaction.encode(decoded))); // hex is the encoded json
+      assert.ok(txSecretKey instanceof Uint8Array);
+      assert.equal(txSecretKey.length, 32);
+      assert.deepStrictEqual(additionalTxSecretKeys, []);
+      assert.deepStrictEqual(tx.parseTxExtra(decoded.prefix.extra).txPublicKeys, [crypto.secretKeyToPublicKey(helpers.decodeInt(txSecretKey))]);
+      assert.ok(bytes instanceof Uint8Array);
+      assert.deepStrictEqual(bytes, raw.fullTransaction.encode(decoded));
       assert.strictEqual(decoded.prefix.vout.length, 2); // recipient + change
       const found = wallet.scanTransaction(keys, decoded, wallet.subaddressLookup(keys, 1, 1)).outputs;
       assert.strictEqual(found.length, 1); // only our change (the recipient output is not ours)
@@ -592,16 +600,101 @@ describe('wallet', () => {
       const recipientAmount = 1000000n;
       const fee = tx.estimateFee(1, 15, 2, tx.estimateExtraSize([{ ...sub, amount: recipientAmount }, { isChange: true }]), BASE_FEE, 1n, FEE_QUANTIZATION);
       const input = spendable(keys, recipientAmount + fee);
-      const { json: decoded } = wallet.createTransaction({
+      const suppliedKey = helpers.encodeInt(17n);
+      const {
+        transaction: decoded, txKeys: { txSecretKey, additionalTxSecretKeys },
+      } = wallet.createTransaction({
         inputs: [input],
         outputs: [{ ...sub, amount: recipientAmount }],
         keys,
         baseFee: BASE_FEE,
         feeQuantization: FEE_QUANTIZATION,
+        txKeys: { txSecretKey: suppliedKey, additionalTxSecretKeys: [helpers.encodeInt(19n)] },
       });
       assert.strictEqual(decoded.prefix.vout.length, 2); // subaddress recipient + dummy
       assert.strictEqual(decoded.prefix.extra.length, 44); // dummy classified as change: no additional keys
       assert.strictEqual(decoded.rctSigBase.txnFee, fee);
+      assert.deepStrictEqual(txSecretKey, suppliedKey);
+      assert.deepStrictEqual(additionalTxSecretKeys, []);
+      assert.deepStrictEqual(tx.parseTxExtra(decoded.prefix.extra).txPublicKeys, [crypto.encodePoint(crypto.decodePoint(sub.publicSpendKey).multiplyUnsafe(17n))]);
+      const found = wallet.scanTransaction(other, decoded, wallet.subaddressLookup(other, 2, 2)).outputs;
+      assert.equal(found.length, 1);
+      assert.equal(found[0].amount, recipientAmount);
+    });
+
+    for (const supplied of [false, true]) {
+      it(`returns ${supplied ? 'supplied' : 'generated'} byte keys for mixed recipients and change`, () => {
+        const keys = wallet.randomKeys();
+        const recipient = wallet.randomKeys();
+        const subRecipient = wallet.randomKeys();
+        const sub = address('mainnet').decode(wallet.getSubaddress(subRecipient, { major: 0, minor: 1 }));
+        const params = {
+          inputs: [spendable(keys, 10000000n)],
+          outputs: [
+            {
+              type: 'address', publicSpendKey: recipient.publicSpendKey, publicViewKey: recipient.publicViewKey, amount: 1000000n,
+            },
+            { ...sub, amount: 2000000n },
+          ],
+          keys,
+          baseFee: BASE_FEE,
+          feeQuantization: FEE_QUANTIZATION,
+          shuffleOutputs: false,
+          txKeys: supplied ? { txSecretKey: helpers.encodeInt(17n), additionalTxSecretKeys: [19n, 23n, 29n].map(helpers.encodeInt) } : undefined,
+        };
+        const originalTxKeys = structuredClone(params.txKeys);
+        const result = wallet.createTransaction(params);
+        assert.deepStrictEqual(params.txKeys, originalTxKeys);
+        assert.deepStrictEqual(Object.keys(result).sort(), ['bytes', 'transaction', 'txKeys']);
+        assert.ok(result.txKeys.txSecretKey instanceof Uint8Array);
+        assert.equal(result.txKeys.txSecretKey.length, 32);
+        assert.equal(result.txKeys.additionalTxSecretKeys.length, 3);
+        if (supplied) {
+          assert.deepStrictEqual(result.txKeys.txSecretKey, params.txKeys.txSecretKey);
+          assert.deepStrictEqual(result.txKeys.additionalTxSecretKeys, params.txKeys.additionalTxSecretKeys);
+          const reused = wallet.createTransaction({ ...params, txKeys: result.txKeys });
+          assert.deepStrictEqual(reused.txKeys, result.txKeys);
+          assert.deepStrictEqual(reused.transaction.prefix, result.transaction.prefix);
+          assert.deepStrictEqual(reused.transaction.rctSigBase, result.transaction.rctSigBase);
+        }
+        assert.ok(result.bytes instanceof Uint8Array);
+        const decoded = raw.fullTransaction.decode(result.bytes);
+        assert.deepStrictEqual(decoded, result.transaction);
+        assert.deepStrictEqual(Object.keys(decoded).sort(), ['prefix', 'rctSigBase', 'rctSigPrunable']);
+        const extra = tx.parseTxExtra(decoded.prefix.extra);
+        assert.deepStrictEqual(extra.txPublicKeys, [result.txKeys.txPublicKey]);
+        assert.deepStrictEqual(extra.additionalTxPublicKeys, result.txKeys.additionalTxPublicKeys);
+        assert.deepStrictEqual(extra.txPublicKeys, [crypto.secretKeyToPublicKey(helpers.decodeInt(result.txKeys.txSecretKey))]);
+        result.txKeys.additionalTxSecretKeys.forEach((key, i) => {
+          assert.ok(key instanceof Uint8Array);
+          assert.equal(key.length, 32);
+          const scalar = helpers.decodeInt(key);
+          const expected = i === 1
+            ? crypto.encodePoint(crypto.decodePoint(sub.publicSpendKey).multiplyUnsafe(scalar))
+            : crypto.secretKeyToPublicKey(scalar);
+          assert.deepStrictEqual(extra.additionalTxPublicKeys[i], expected);
+        });
+        [recipient, subRecipient, keys].forEach((owner, i) => {
+          const found = wallet.scanTransaction(owner, decoded, wallet.subaddressLookup(owner, 1, 2)).outputs;
+          assert.equal(found.length, 1);
+          assert.equal(found[0].index, i);
+          assert.equal(found[0].amount, i === 2 ? params.inputs[0].amount - 3000000n - decoded.rctSigBase.txnFee : params.outputs[i].amount);
+        });
+        for (const additionalTxSecretKeys of [[], [19n, 23n].map(helpers.encodeInt), [19n, 23n, 29n, 31n].map(helpers.encodeInt)]) {
+          assert.throws(() => wallet.createTransaction({ ...params, txKeys: { ...params.txKeys, additionalTxSecretKeys } }), /additionalTxSecretKeys: expected/);
+        }
+      });
+    }
+
+    it('rejects transaction keys that are not 32-byte Uint8Arrays', () => {
+      const keys = wallet.randomKeys();
+      const params = {
+        inputs: [], outputs: [], keys, baseFee: BASE_FEE, feeQuantization: FEE_QUANTIZATION,
+      };
+      for (const key of [new Uint8Array(31), new Uint8Array(33), 17n]) {
+        assert.throws(() => wallet.createTransaction({ ...params, txKeys: { txSecretKey: key } }), /tx secret key/);
+        assert.throws(() => wallet.createTransaction({ ...params, txKeys: { additionalTxSecretKeys: [key] } }), /additional tx secret key/);
+      }
     });
 
     it('throws when inputs cannot cover the outputs and fee', () => {
@@ -647,10 +740,10 @@ describe('wallet', () => {
         {
           type: 'subaddress', ...subaddressKeys, amount: 1n,
         },
-      ], crypto.randomScalar());
-      const additionalPublicKey = generated.additionalPublicKeys[1];
+      ], { txSecretKey: crypto.randomScalar() });
+      const additionalTxPublicKey = generated.txKeys.additionalTxPublicKeys[1];
       const derivation = crypto.generateKeyDerivation(
-        additionalPublicKey, helpers.decodeInt(keys.secretViewKey)
+        additionalTxPublicKey, helpers.decodeInt(keys.secretViewKey)
       );
       const keyImage = crypto.outputKeyImage(
         helpers.decodeInt(keys.secretViewKey),
@@ -661,8 +754,8 @@ describe('wallet', () => {
       );
 
       assert.strictEqual(wallet.isOwnKeyImage(keys, {
-        txPublicKey: generated.txPublicKey,
-        additionalPublicKey,
+        txPublicKey: generated.txKeys.txPublicKey,
+        additionalTxPublicKey,
         index: 1,
         subaddress,
       }, keyImage), true);
@@ -686,7 +779,7 @@ describe('wallet', () => {
         helpers.decodeInt(keys.secretViewKey), helpers.decodeInt(keys.secretSpendKey), derivation, 0, { major: 0, minor: 0 }
       );
       assert.strictEqual(wallet.isOwnKeyImage(keys, {
-        txPublicKey, additionalPublicKey: new Uint8Array(32).fill(0xff), index: 0, subaddress: { major: 0, minor: 0 },
+        txPublicKey, additionalTxPublicKey: new Uint8Array(32).fill(0xff), index: 0, subaddress: { major: 0, minor: 0 },
       }, keyImage), true);
     });
   });
