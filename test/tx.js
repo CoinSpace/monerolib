@@ -1,17 +1,24 @@
 /* eslint-disable max-len */
 import assert from 'node:assert';
 import {
+  afterEach, beforeEach, describe, it,
+} from 'node:test';
+import {
   bytesToHex, hexToBytes, randomBytes,
 } from '@noble/hashes/utils.js';
-import { describe, it } from 'node:test';
 
 import * as bulletproofs from '../lib/bulletproofs.js';
 import * as clsag from '../lib/clsag.js';
 import * as crypto from '../lib/crypto.js';
 import * as cryptoData from '../lib/crypto-data.js';
+import * as helpers from '../lib/helpers.js';
 import * as raw from '../lib/raw.js';
 import * as ringct from '../lib/ringct.js';
 import * as tx from '../lib/tx.js';
+
+import { mockRandomBytes } from './mock-random.js';
+
+import constructFixtures from './fixtures/construct_txs.json' with { type: 'json' };
 import txFixtures from './fixtures/txs.json' with { type: 'json' };
 
 describe('tx', () => {
@@ -807,6 +814,59 @@ describe('tx', () => {
       // the recipient recovers it with the tx pub key and its own view secret
       assert.deepStrictEqual(tx.encryptPaymentId(encryptedPaymentId, txPublicKey, recipient.secretView), paymentId);
     });
+  });
+
+  // Transactions built by monero v0.18.5.1 construct_tx_with_tx_key, with every construction input
+  // recorded. Both implementations draw the transaction key, the Bulletproof+ nonces, the pseudo
+  // output masks and the CLSAG nonces in the same order, so the same random stream must yield the
+  // same bytes. The stream only lines up when the transaction keys are replayed the way monero
+  // produced them, which generatedTxKeys records.
+  describe('createTransaction against monero', () => {
+    const scalar = (hex) => helpers.decodeInt(hexToBytes(hex));
+
+    beforeEach(mockRandomBytes);
+    afterEach(() => crypto.__mockRandomBytes__(randomBytes));
+
+    for (const fixture of constructFixtures) {
+      it(fixture.label, () => {
+        const { construct } = fixture;
+        const { bytes } = tx.createTransaction({
+          inputs: construct.inputs.map((input) => ({
+            keyOffset: scalar(input.keyOffset),
+            publicKey: hexToBytes(input.publicKey),
+            amount: BigInt(input.amount),
+            mask: scalar(input.mask),
+            commitment: hexToBytes(input.commitment),
+            globalIndex: BigInt(input.globalIndex),
+            decoys: input.decoys.map((decoy) => ({
+              publicKey: hexToBytes(decoy.publicKey),
+              commitment: hexToBytes(decoy.commitment),
+              globalIndex: BigInt(decoy.globalIndex),
+            })),
+          })),
+          outputs: construct.outputs.map((output) => ({
+            type: output.type,
+            publicSpendKey: hexToBytes(output.publicSpendKey),
+            publicViewKey: hexToBytes(output.publicViewKey),
+            amount: BigInt(output.amount),
+            ...(output.isChange ? { isChange: true } : {}),
+            ...(output.paymentID ? { paymentID: hexToBytes(output.paymentID) } : {}),
+          })),
+          secretSpendKey: scalar(construct.secretSpendKey),
+          secretViewKey: scalar(construct.secretViewKey),
+          unlockTime: BigInt(construct.unlockTime),
+          shuffleOutputs: construct.shuffleOutputs,
+          ...(construct.generatedTxKeys ? {} : {
+            txKeys: {
+              txSecretKey: scalar(construct.txKeys.txSecretKey),
+              additionalTxSecretKeys: construct.txKeys.additionalTxSecretKeys.map(scalar),
+            },
+          }),
+        });
+
+        assert.strictEqual(bytesToHex(bytes), fixture.hex);
+      });
+    }
   });
 
   describe('globalIndexesFromOutputOffsets', () => {

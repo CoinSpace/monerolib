@@ -1,30 +1,21 @@
 /* eslint-disable max-len */
 import assert from 'node:assert';
 import fs from 'fs/promises';
-import { keccakP } from '@noble/hashes/sha3.js';
+import {
+  before, describe, it,
+} from 'node:test';
 import { bytesToHex, hexToBytes } from '@noble/hashes/utils.js';
-import { describe, it } from 'node:test';
 
 import * as crypto from '../lib/crypto.js';
 import * as helpers from '../lib/helpers.js';
 
+import { mockRandomBytes } from './mock-random.js';
+
 // https://github.com/monero-project/monero/blob/v0.18.5.0/tests/crypto/tests.txt
 const tests = (await fs.readFile('./test/fixtures/tests.txt', { encoding: 'utf8' })).split('\n');
 
-/**
- * https://github.com/monero-project/monero/blob/v0.18.5.0/tests/crypto/random.c#L35-L37
- */
-const state = new Uint32Array(new Int8Array(200)
-  .fill(42)
-  .buffer);
-
-function randomBytes(length) {
-  keccakP(state);
-  const buf = new Uint8Array(state.buffer);
-  return buf.subarray(0, length);
-}
-
-crypto.__mockRandomBytes__(randomBytes);
+// The vectors below replay one shared stream, so it is started once for the whole file.
+before(mockRandomBytes);
 
 describe('crypto', () => {
   for (const item of tests) {
