@@ -15,6 +15,7 @@ import * as ringct from '../lib/ringct.js';
 import * as tx from '../lib/tx.js';
 import * as wallet from '../lib/wallet.js';
 import { address } from '../lib/address.js';
+import constructFixtures from './fixtures/construct_txs.json' with { type: 'json' };
 // https://github.com/monero-oxide/monero-oxide/blob/946ec5f00ff071b129758ee8cba5528539fccfe4/monero-oxide/wallet/src/tests/scan.rs#L17-L167
 import scanVector from './fixtures/monero_oxide_scan.json' with { type: 'json' };
 
@@ -709,6 +710,182 @@ describe('wallet', () => {
         baseFee: BASE_FEE,
         feeQuantization: FEE_QUANTIZATION,
       }), /not enough funds/);
+    });
+  });
+
+  describe('checkTxKey', () => {
+    // monero construct_tx vectors; shuffleOutputs is false, so vout[i] is outputs[i]
+    const decode = (fixture) => raw.fullTransaction.decode(hexToBytes(fixture.hex));
+    const txKeysOf = ({ construct }) => ({
+      txSecretKey: hexToBytes(construct.txKeys.txSecretKey),
+      additionalTxSecretKeys: construct.txKeys.additionalTxSecretKeys.map(hexToBytes),
+    });
+    const destinationOf = (output) => address('mainnet').encode({
+      type: output.type,
+      publicSpendKey: hexToBytes(output.publicSpendKey),
+      publicViewKey: hexToBytes(output.publicViewKey),
+      ...(output.paymentID ? { paymentID: hexToBytes(output.paymentID) } : {}),
+    });
+    const recipientsOf = ({ construct }) => construct.outputs
+      .map((output, index) => ({ output, index }))
+      .filter(({ output }) => !output.isChange);
+
+    for (const fixture of constructFixtures) {
+      it(`finds every recipient: ${fixture.label}`, () => {
+        const recipients = recipientsOf(fixture);
+        const destinations = recipients.map(({ output }) => destinationOf(output));
+        const found = wallet.checkTxKey(decode(fixture), txKeysOf(fixture), destinations);
+        assert.deepStrictEqual(
+          found.map(({
+            index, destination, amount,
+          }) => ({
+            index, destination, amount,
+          })),
+          recipients.map(({ output, index }) => ({
+            index, destination: destinationOf(output), amount: BigInt(output.amount),
+          }))
+        );
+      });
+    }
+
+    const mixed = constructFixtures[1]; // standard + subaddress, with additional keys
+    const [standard, subaddress] = mixed.construct.outputs.map(destinationOf);
+
+    it('without the tx secret key finds only the additional-key subaddress output', () => {
+      const { additionalTxSecretKeys } = txKeysOf(mixed);
+      const found = wallet.checkTxKey(decode(mixed), { additionalTxSecretKeys }, [standard, subaddress]);
+      assert.deepStrictEqual(found.map(({ index, destination }) => ({ index, destination })), [{ index: 1, destination: subaddress }]);
+    });
+
+    it('without additional keys finds only the standard output', () => {
+      const { txSecretKey } = txKeysOf(mixed);
+      const found = wallet.checkTxKey(decode(mixed), { txSecretKey }, [standard, subaddress]);
+      assert.deepStrictEqual(found.map(({ index, destination }) => ({ index, destination })), [{ index: 0, destination: standard }]);
+    });
+
+    it('accepts a short additional key list', () => {
+      const { txSecretKey, additionalTxSecretKeys } = txKeysOf(mixed);
+      const found = wallet.checkTxKey(decode(mixed), { txSecretKey, additionalTxSecretKeys: additionalTxSecretKeys.slice(0, 1) }, [standard, subaddress]);
+      assert.deepStrictEqual(found.map(({ index }) => index), [0]);
+    });
+
+    it('keeps additional keys at their vout index when entries are missing', () => {
+      const [, key1] = txKeysOf(mixed).additionalTxSecretKeys;
+      // eslint-disable-next-line no-sparse-arrays
+      for (const additionalTxSecretKeys of [[undefined, key1, null], [null, key1], [, key1]]) {
+        const found = wallet.checkTxKey(decode(mixed), { txSecretKey: null, additionalTxSecretKeys }, [standard, subaddress]);
+        assert.deepStrictEqual(found.map(({ index, destination }) => ({ index, destination })), [{ index: 1, destination: subaddress }]);
+      }
+    });
+
+    it('checks only the given addresses', () => {
+      const found = wallet.checkTxKey(decode(mixed), txKeysOf(mixed), [subaddress]);
+      assert.deepStrictEqual(found.map(({ index, destination }) => ({ index, destination })), [{ index: 1, destination: subaddress }]);
+    });
+
+    it('keeps a matched recipient without an amount when the amount does not decode', () => {
+      const decodedTx = decode(mixed);
+      decodedTx.rctSigBase.ecdhInfo[0].amount = new Uint8Array(8).fill(0xff);
+      delete decodedTx.rctSigBase.outPk[1];
+      const found = wallet.checkTxKey(decodedTx, txKeysOf(mixed), [standard, subaddress]);
+      assert.deepStrictEqual(found, [{ index: 0, destination: standard }, { index: 1, destination: subaddress }]);
+    });
+
+    it('continues after a malformed output key', () => {
+      const decodedTx = decode(mixed);
+      decodedTx.prefix.vout[0].target.data.key = new Uint8Array(32).fill(0xff);
+      const found = wallet.checkTxKey(decodedTx, txKeysOf(mixed), [standard, subaddress]);
+      assert.deepStrictEqual(found.map(({ index, amount }) => ({ index, amount })), [{ index: 1, amount: 2000000n }]);
+    });
+
+    it('has no amount, not 0n, for a v2 tx without its RingCT base', () => {
+      const decodedTx = decode(mixed);
+      delete decodedTx.rctSigBase;
+      const found = wallet.checkTxKey(decodedTx, txKeysOf(mixed), [standard, subaddress]);
+      assert.deepStrictEqual(found, [{ index: 0, destination: standard }, { index: 1, destination: subaddress }]);
+    });
+
+    it('returns nothing for bad or missing data without throwing', () => {
+      const decodedTx = decode(mixed);
+      const txKeys = txKeysOf(mixed);
+      const other = wallet.getAddress(wallet.keysFromSeed(new Uint8Array(32).fill(7)));
+      const stagenet = address('stagenet').encode(address('mainnet').decode(standard));
+      const badPoint = address('mainnet').encode({
+        type: 'address', publicSpendKey: new Uint8Array(32).fill(0xff), publicViewKey: new Uint8Array(32).fill(0xff),
+      });
+      assert.deepStrictEqual(wallet.checkTxKey(decodedTx, txKeys, [other, 'not an address', stagenet, badPoint]), []);
+      assert.deepStrictEqual(wallet.checkTxKey(decodedTx, {}, [standard, subaddress]), []);
+      assert.deepStrictEqual(wallet.checkTxKey(decodedTx, { txSecretKey: new Uint8Array(32).fill(0xff) }, [standard]), []);
+      assert.deepStrictEqual(wallet.checkTxKey(decodedTx, txKeys, []), []);
+    });
+  });
+
+  describe('annotateTransaction', () => {
+    const mixed = constructFixtures[1];
+    const { construct } = mixed;
+    const decodedTx = raw.fullTransaction.decode(hexToBytes(mixed.hex));
+    const keys = wallet.keysFromSecretKeys(hexToBytes(construct.secretSpendKey), hexToBytes(construct.secretViewKey));
+    const subaddresses = wallet.subaddressLookup(keys, 1, 1);
+    const txKeys = {
+      txSecretKey: hexToBytes(construct.txKeys.txSecretKey),
+      additionalTxSecretKeys: construct.txKeys.additionalTxSecretKeys.map(hexToBytes),
+    };
+    const destinations = construct.outputs.slice(0, 2).map((output) => address('mainnet').encode({
+      type: output.type, publicSpendKey: hexToBytes(output.publicSpendKey), publicViewKey: hexToBytes(output.publicViewKey),
+    }));
+
+    it('marks recipients and the change', () => {
+      const { prefix } = wallet.annotateTransaction(decodedTx, {
+        keys, subaddresses, txKeys, destinations,
+      });
+      assert.deepStrictEqual(prefix.vout.map((vout) => vout.recipient?.destination), [...destinations, undefined]);
+      assert.deepStrictEqual(prefix.vout.map((vout) => vout.recipient?.amount), [2000000n, 2000000n, undefined]);
+      assert.deepStrictEqual(prefix.vout.map((vout) => vout.owned?.amount), [undefined, undefined, 1000000n]);
+      assert.deepStrictEqual(prefix.vout[2].owned.subaddress, { major: 0, minor: 0 });
+    });
+
+    it('keeps the transaction unchanged without data and does not mutate the input', () => {
+      const before = structuredClone(decodedTx);
+      assert.deepStrictEqual(wallet.annotateTransaction(decodedTx), decodedTx);
+      wallet.annotateTransaction(decodedTx, {
+        keys, subaddresses, txKeys, destinations,
+      });
+      assert.deepStrictEqual(decodedTx, before);
+    });
+
+    it('accumulates annotations over calls and keeps a decoded amount', () => {
+      const withOwned = wallet.annotateTransaction(decodedTx, { keys, subaddresses });
+      const full = wallet.annotateTransaction(withOwned, { txKeys, destinations });
+      assert.deepStrictEqual(full, wallet.annotateTransaction(decodedTx, {
+        keys, subaddresses, txKeys, destinations,
+      }));
+      assert.deepStrictEqual(wallet.annotateTransaction(full), full);
+
+      const withoutBase = structuredClone(full);
+      delete withoutBase.rctSigBase;
+      const again = wallet.annotateTransaction(withoutBase, { txKeys, destinations });
+      assert.deepStrictEqual(again.prefix.vout, full.prefix.vout);
+    });
+
+    it('adds the amount to a recipient found earlier without it', () => {
+      const withoutBase = structuredClone(decodedTx);
+      delete withoutBase.rctSigBase;
+      const partial = wallet.annotateTransaction(withoutBase, { txKeys, destinations });
+      assert.deepStrictEqual(partial.prefix.vout[0].recipient, { index: 0, destination: destinations[0] });
+      const restored = wallet.annotateTransaction({ ...partial, rctSigBase: decodedTx.rctSigBase }, { txKeys, destinations });
+      assert.strictEqual(restored.prefix.vout[0].recipient.amount, 2000000n);
+    });
+
+    it('annotates a pruned transaction the same way', () => {
+      const bytes = hexToBytes(mixed.hex);
+      const pruned = raw.prunedTransaction.decode(raw.prunedTransaction.encode(raw.fullTransaction.decode(bytes)));
+      const params = {
+        keys, subaddresses, txKeys, destinations,
+      };
+      assert.deepStrictEqual(
+        wallet.annotateTransaction(pruned, params).prefix.vout,
+        wallet.annotateTransaction(decodedTx, params).prefix.vout
+      );
     });
   });
 

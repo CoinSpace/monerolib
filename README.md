@@ -42,6 +42,11 @@ const addr = wallet.getSubaddress(keys, { major: 0, minor: 0 });
 const lookup = wallet.subaddressLookup(keys, majorCount, minorCount);
 const owned = wallet.scanOutput(keys, output, lookup);
 
+// outputs of a tx: recipients from the stored tx keys and addresses, own outputs from own keys
+const annotated = wallet.annotateTransaction(decodedTx, {
+  keys, subaddresses: lookup, txKeys, destinations: [recipient],
+});
+
 // attach ring decoys to each spendable input (ring size is fixed at 16)
 const pick = decoys.gammaPicker(rctOffsets);
 for (const input of inputs) input.decoys = pickDecoys(pick, 15, input.globalIndex);
