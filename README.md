@@ -59,7 +59,7 @@ const { fee, sweepAmount } = coinselect.selectInputs({
 });
 
 // Picks inputs and adds change or a dummy output.
-const { transaction, bytes, txKeys } = wallet.createTransaction({
+const { transaction, bytes, txKeys, destinations } = wallet.createTransaction({
   inputs,
   outputs: [{ ...address('mainnet').decode(recipient), amount }],
   keys, baseFee, feeQuantization,

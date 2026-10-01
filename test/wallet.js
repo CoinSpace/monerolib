@@ -603,7 +603,7 @@ describe('wallet', () => {
       const input = spendable(keys, recipientAmount + fee);
       const suppliedKey = helpers.encodeInt(17n);
       const {
-        transaction: decoded, txKeys: { txSecretKey, additionalTxSecretKeys },
+        transaction: decoded, txKeys: { txSecretKey, additionalTxSecretKeys }, destinations,
       } = wallet.createTransaction({
         inputs: [input],
         outputs: [{ ...sub, amount: recipientAmount }],
@@ -621,6 +621,40 @@ describe('wallet', () => {
       const found = wallet.scanTransaction(other, decoded, wallet.subaddressLookup(other, 2, 2)).outputs;
       assert.equal(found.length, 1);
       assert.equal(found[0].amount, recipientAmount);
+      assert.strictEqual(destinations[found[0].index].isChange, undefined);
+      assert.deepStrictEqual(destinations.filter((destination) => destination.isChange).map((destination) => destination.amount), [0n]);
+    });
+
+    it('returns the destinations in output order, with the change marked', () => {
+      const keys = wallet.randomKeys();
+      const coder = address('mainnet');
+      const addresses = [wallet.randomKeys(), wallet.randomKeys()].map((recipient) => wallet.getAddress(recipient));
+      const outputs = addresses.map((recipientAddress, i) => ({ ...coder.decode(recipientAddress), amount: BigInt(i + 1) * 1000000n }));
+      const snapshot = structuredClone(outputs);
+      const {
+        transaction: decoded, txKeys, destinations,
+      } = wallet.createTransaction({
+        inputs: [spendable(keys, 10000000n)],
+        outputs,
+        keys,
+        baseFee: BASE_FEE,
+        feeQuantization: FEE_QUANTIZATION,
+      });
+      assert.strictEqual(destinations.length, decoded.prefix.vout.length);
+      const recipients = wallet.checkTxKey(decoded, txKeys, addresses);
+      assert.strictEqual(recipients.length, 2);
+      for (const {
+        index, destination, amount,
+      } of recipients) {
+        assert.ok(!destinations[index].isChange);
+        assert.strictEqual(destinations[index].amount, amount);
+        assert.strictEqual(coder.encode(destinations[index]), destination);
+      }
+      const owned = wallet.scanTransaction(keys, decoded, wallet.subaddressLookup(keys, 1, 1)).outputs;
+      assert.strictEqual(owned.length, 1);
+      assert.strictEqual(destinations[owned[0].index].isChange, true);
+      assert.strictEqual(destinations[owned[0].index].amount, owned[0].amount);
+      assert.deepStrictEqual(outputs, snapshot);
     });
 
     for (const supplied of [false, true]) {
@@ -646,7 +680,7 @@ describe('wallet', () => {
         const originalTxKeys = structuredClone(params.txKeys);
         const result = wallet.createTransaction(params);
         assert.deepStrictEqual(params.txKeys, originalTxKeys);
-        assert.deepStrictEqual(Object.keys(result).sort(), ['bytes', 'transaction', 'txKeys']);
+        assert.deepStrictEqual(Object.keys(result).sort(), ['bytes', 'destinations', 'transaction', 'txKeys']);
         assert.ok(result.txKeys.txSecretKey instanceof Uint8Array);
         assert.equal(result.txKeys.txSecretKey.length, 32);
         assert.equal(result.txKeys.additionalTxSecretKeys.length, 3);

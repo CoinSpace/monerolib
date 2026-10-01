@@ -526,10 +526,10 @@ describe('tx', () => {
         inputs, outputs, secretSpendKey: 0n, secretViewKey: sender.secretView,
       };
       const prepared = tx.prepareTransaction(params);
-      assert.deepStrictEqual(Object.keys(prepared).sort(), ['transaction', 'txKeys']);
+      assert.deepStrictEqual(Object.keys(prepared).sort(), ['destinations', 'transaction', 'txKeys']);
       assert.ok(prepared.transaction.prefix && prepared.transaction.rctSigBase && prepared.transaction.rctSigPrunable);
       const created = tx.createTransaction(params);
-      assert.deepStrictEqual(Object.keys(created).sort(), ['bytes', 'txKeys']);
+      assert.deepStrictEqual(Object.keys(created).sort(), ['bytes', 'destinations', 'txKeys']);
       assert.ok(created.bytes instanceof Uint8Array);
       for (const result of [prepared, created]) {
         const decoded = result.transaction ?? raw.fullTransaction.decode(result.bytes);
@@ -656,6 +656,39 @@ describe('tx', () => {
         });
       }
     }
+
+    it('returns the destinations in output order without changing the caller outputs', () => {
+      const sub = stdWallet();
+      sub.type = 'subaddress';
+      sub.publicViewKey = crypto.encodePoint(crypto.decodePoint(sub.publicSpendKey).multiplyUnsafe(sub.secretView));
+      const sender = stdWallet();
+      const outputs = [
+        { ...stdWallet(), amount: 10n },
+        { ...sub, amount: 20n },
+        {
+          ...sender, isChange: true, amount: 9n,
+        },
+      ];
+      const snapshot = structuredClone(outputs);
+      const params = {
+        inputs: [makeInput(40n, 2)], outputs, secretSpendKey: 0n, secretViewKey: sender.secretView,
+      };
+      for (const result of [tx.prepareTransaction(params), tx.createTransaction(params)]) {
+        const { destinations, txKeys } = result;
+        const decoded = result.transaction ?? raw.fullTransaction.decode(result.bytes);
+        assert.deepStrictEqual(outputs.map((output) => destinations.indexOf(output)).sort(), [0, 1, 2]);
+        destinations.forEach((owner, i) => {
+          const publicKey = owner.type === 'subaddress' ? txKeys.additionalTxPublicKeys[i] : txKeys.txPublicKey;
+          const derivation = crypto.generateKeyDerivation(publicKey, owner.secretView);
+          assert.deepStrictEqual(crypto.derivePublicKey(derivation, i, owner.publicSpendKey), decoded.prefix.vout[i].target.data.key);
+          assert.equal(ringct.decodeRct(decoded.rctSigBase.ecdhInfo[i], decoded.rctSigBase.outPk[i], 6, i, derivation).amount, owner.amount);
+        });
+      }
+      const unshuffled = tx.prepareTransaction({ ...params, shuffleOutputs: false }).destinations;
+      assert.deepStrictEqual(unshuffled, outputs);
+      assert.notStrictEqual(unshuffled, outputs);
+      assert.deepStrictEqual(outputs, snapshot);
+    });
 
     it('requires one additional key for every mixed output, including change or dummy', () => {
       const sender = stdWallet();
