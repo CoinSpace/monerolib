@@ -5,6 +5,7 @@ import { describe, it } from 'node:test';
 
 import * as coinselect from '../lib/coinselect.js';
 import * as tx from '../lib/tx.js';
+import { TX_WEIGHT_TARGET } from '../lib/config.js';
 
 describe('coinselect', () => {
   const RING_SIZE = 16;
@@ -37,6 +38,10 @@ describe('coinselect', () => {
   // the exact fee selectInputs must compute for a given input count and output list
   const feeFor = (nInputs, outputList) => tx.estimateFee(
     nInputs, MIXIN, outputList.length, tx.estimateExtraSize(outputList), BASE_FEE, FEE_MULTIPLIER, FEE_QUANTIZATION
+  );
+
+  const weightFor = (nInputs, outputList) => tx.estimateTxWeight(
+    nInputs, MIXIN, outputList.length, tx.estimateExtraSize(outputList)
   );
 
   // Σselected === Σfixed + (change | sweep | 0) + fee  — nothing lost or double-counted
@@ -118,6 +123,12 @@ describe('coinselect', () => {
     it('throws when funds cannot cover amount + fee', () => {
       assert.throws(() => select([{ amount: 1_000n }], [addr(1_000_000_000_000n)]), /not enough funds/);
     });
+
+    it('too many small inputs: transaction too large; total too small: not enough funds', () => {
+      const candidates = Array.from({ length: 300 }, () => ({ amount: 1_000_000_000n }));
+      assert.throws(() => select(candidates, [addr(200_000_000_000n)]), /transaction too large/);
+      assert.throws(() => select(candidates, [addr(301_000_000_000n)]), /not enough funds/);
+    });
   });
 
   describe('sweep mode', () => {
@@ -159,6 +170,31 @@ describe('coinselect', () => {
 
     it('throws when funds cannot cover fixed + fee', () => {
       assert.throws(() => select([{ amount: 1_000n }], [addr(1_000_000_000_000n), addr()]), /not enough funds/);
+    });
+
+    it('takes the largest candidates that fit in TX_WEIGHT_TARGET', () => {
+      const dst = addr();
+      const outputs = [dst, { isChange: true }];
+      const candidates = Array.from({ length: 300 }, (_, i) => ({ amount: BigInt((i * 7919) % 300 + 1) * 1_000_000_000n }));
+      const res = select(candidates, [dst]);
+      const k = res.selected.length;
+      assert.ok(k < candidates.length);
+      assert.ok(weightFor(k, outputs) <= TX_WEIGHT_TARGET);
+      assert.ok(weightFor(k + 1, outputs) > TX_WEIGHT_TARGET);
+      const largest = candidates.map((c) => c.amount).sort((a, b) => (b > a ? 1 : -1)).slice(0, k);
+      assert.deepStrictEqual(res.selected.map((c) => c.amount), largest);
+      assert.equal(res.fee, feeFor(k, outputs));
+      assert.equal(res.sweepAmount, total(res.selected) - res.fee);
+      assertConserves(res, [dst]);
+    });
+
+    it('uses maxWeight from the caller', () => {
+      const dst = addr();
+      const candidates = Array.from({ length: 300 }, () => ({ amount: 1_000_000_000n }));
+      const res = coinselect.selectInputs({
+        candidates, destinations: [dst], ringSize: RING_SIZE, baseFee: BASE_FEE, feeQuantization: FEE_QUANTIZATION, maxWeight: weightFor(10, [dst, { isChange: true }]),
+      });
+      assert.equal(res.selected.length, 10);
     });
 
     it('sweep target can receive 0 (valid amount): sweepAmount === 0', () => {
