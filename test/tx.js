@@ -22,6 +22,11 @@ import constructFixtures from './fixtures/construct_txs.json' with { type: 'json
 import txFixtures from './fixtures/txs.json' with { type: 'json' };
 
 describe('tx', () => {
+  // a tx secret key generator that returns the given keys in order
+  const fixedKeys = (keys) => {
+    const iterator = keys.values();
+    return () => iterator.next().value;
+  };
 
   describe('parseTxExtra', () => {
 
@@ -246,140 +251,85 @@ describe('tx', () => {
       });
     };
 
-    it('standard recipients are detectable (R = r*G, no additional keys)', () => {
+    it('standard recipients: R = r*G, no additional keys', () => {
       const a = stdWallet();
       const b = stdWallet();
-      const r = crypto.randomScalar();
-      const out = tx.generateOutputs([a, b], { txSecretKey: r });
-      assert.equal(out.txKeys.additionalTxPublicKeys.length, 0);
+      const out = tx.generateOutputs([a, b], fixedKeys([17n]));
+      assert.deepStrictEqual(out.txKeys.txPublicKey, crypto.secretKeyToPublicKey(17n));
+      assert.deepStrictEqual(out.txKeys.additionalTxPublicKeys, []);
       assert.ok(recipientFinds(out, 0, a));
       assert.ok(recipientFinds(out, 1, b));
     });
 
-    it('standard + subaddress uses additional keys', () => {
+    it('standard + subaddress: R = r*G, one additional key per output', () => {
       const a = stdWallet();
       const s = subWallet();
-      const r = crypto.randomScalar();
-      const out = tx.generateOutputs([a, s], { txSecretKey: r });
-      assert.equal(out.txKeys.additionalTxPublicKeys.length, 2);
+      const out = tx.generateOutputs([a, s], fixedKeys([17n, 19n, 23n]));
+      assert.deepStrictEqual(out.txKeys.txPublicKey, crypto.secretKeyToPublicKey(17n));
+      assert.deepStrictEqual(out.txKeys.additionalTxPublicKeys, [
+        crypto.secretKeyToPublicKey(19n),
+        crypto.encodePoint(crypto.decodePoint(s.publicSpendKey).multiplyUnsafe(23n)),
+      ]);
       assert.ok(recipientFinds(out, 0, a));
       assert.ok(recipientFinds(out, 1, s));
     });
 
-    it('single subaddress sets R = r*D, no additional keys', () => {
+    it('single subaddress: R = r*D, no additional keys', () => {
       const s = subWallet();
-      const r = crypto.randomScalar();
-      const out = tx.generateOutputs([s], { txSecretKey: r });
-      assert.equal(out.txKeys.additionalTxPublicKeys.length, 0);
-      assert.deepStrictEqual(out.txKeys.txPublicKey, crypto.encodePoint(crypto.decodePoint(s.publicSpendKey).multiplyUnsafe(r)));
+      const out = tx.generateOutputs([s], fixedKeys([17n]));
+      assert.deepStrictEqual(out.txKeys.txPublicKey, crypto.encodePoint(crypto.decodePoint(s.publicSpendKey).multiplyUnsafe(17n)));
+      assert.deepStrictEqual(out.txKeys.additionalTxPublicKeys, []);
       assert.ok(recipientFinds(out, 0, s));
     });
 
-    it('two distinct subaddresses use additional keys (R = r*G)', () => {
+    it('two distinct subaddresses: R = r*G, one additional key per output', () => {
       const s1 = subWallet();
       const s2 = subWallet();
-      const r = crypto.randomScalar();
-      const out = tx.generateOutputs([s1, s2], { txSecretKey: r });
-      assert.equal(out.txKeys.additionalTxPublicKeys.length, 2);
-      assert.deepStrictEqual(out.txKeys.txPublicKey, crypto.secretKeyToPublicKey(r));
+      const out = tx.generateOutputs([s1, s2], fixedKeys([17n, 19n, 23n]));
+      assert.deepStrictEqual(out.txKeys.txPublicKey, crypto.secretKeyToPublicKey(17n));
+      assert.deepStrictEqual(out.txKeys.additionalTxPublicKeys, [
+        crypto.encodePoint(crypto.decodePoint(s1.publicSpendKey).multiplyUnsafe(19n)),
+        crypto.encodePoint(crypto.decodePoint(s2.publicSpendKey).multiplyUnsafe(23n)),
+      ]);
       assert.ok(recipientFinds(out, 0, s1));
       assert.ok(recipientFinds(out, 1, s2));
     });
 
     it('duplicate subaddress is deduped: R = r*D, no additional keys', () => {
       const s = subWallet();
-      const r = crypto.randomScalar();
-      const out = tx.generateOutputs([s, s], { txSecretKey: r });
-      assert.equal(out.txKeys.additionalTxPublicKeys.length, 0);
-      assert.deepStrictEqual(out.txKeys.txPublicKey, crypto.encodePoint(crypto.decodePoint(s.publicSpendKey).multiplyUnsafe(r)));
+      const out = tx.generateOutputs([s, s], fixedKeys([17n]));
+      assert.deepStrictEqual(out.txKeys.txPublicKey, crypto.encodePoint(crypto.decodePoint(s.publicSpendKey).multiplyUnsafe(17n)));
+      assert.deepStrictEqual(out.txKeys.additionalTxPublicKeys, []);
       assert.ok(recipientFinds(out, 0, s));
       assert.ok(recipientFinds(out, 1, s));
     });
 
-    it('change derives from a*R and stays detectable (single subaddress + change)', () => {
+    it('change derives from a*R: single subaddress + change, R = r*D', () => {
       const s = subWallet();
       const sender = stdWallet();
-      const r = crypto.randomScalar();
       const change = { ...sender, isChange: true };
-      const out = tx.generateOutputs([s, change], { txSecretKey: r }, sender.secretView);
+      const out = tx.generateOutputs([s, change], fixedKeys([17n]), sender.secretView);
+      assert.deepStrictEqual(out.txKeys.txPublicKey, crypto.encodePoint(crypto.decodePoint(s.publicSpendKey).multiplyUnsafe(17n)));
+      assert.deepStrictEqual(out.txKeys.additionalTxPublicKeys, []);
       assert.ok(recipientFinds(out, 0, s));
       assert.ok(recipientFinds(out, 1, sender));
     });
 
-    it('generates additional keys only when needed and omitted', () => {
-      const standard = stdWallet();
-      const sub = subWallet();
-      const change = { ...standard, isChange: true };
-      let randomCalls = 0;
-      crypto.__mockRandomBytes__((length) => {
-        randomCalls++;
-        return new Uint8Array(length).fill(1);
-      });
-      try {
-        for (const destinations of [[standard, change], [sub, change]]) {
-          for (const keys of [undefined, [], [19n]]) {
-            const result = tx.generateOutputs(destinations, { txSecretKey: 17n, additionalTxSecretKeys: keys }, standard.secretView);
-            assert.deepStrictEqual(result.txKeys.additionalTxSecretKeys, []);
-          }
-        }
-        const mixed = [standard, sub, change];
-        const keys = [19n, 23n, 29n];
-        assert.deepStrictEqual(tx.generateOutputs(mixed, { txSecretKey: 17n, additionalTxSecretKeys: keys }, standard.secretView).txKeys.additionalTxSecretKeys, keys);
-        assert.throws(() => tx.generateOutputs(mixed, { txSecretKey: 17n, additionalTxSecretKeys: [] }, standard.secretView), /additionalTxSecretKeys: expected/);
-        assert.equal(randomCalls, 0);
-        assert.equal(tx.generateOutputs(mixed, { txSecretKey: 17n }, standard.secretView).txKeys.additionalTxSecretKeys.length, mixed.length);
-        assert.equal(randomCalls, mixed.length);
-      } finally {
-        crypto.__mockRandomBytes__(randomBytes);
-      }
-    });
-
-    it('accepts omitted, empty, partial, and returned txKeys without changing the supplied object', () => {
-      const standard = stdWallet();
-      const sub = subWallet();
-      const destinations = [standard, sub];
-      for (const txKeys of [undefined, {}, { txSecretKey: 17n }, { additionalTxSecretKeys: [19n, 23n] }]) {
-        const original = structuredClone(txKeys);
-        if (txKeys !== undefined) {
-          Object.freeze(txKeys);
-          if (txKeys.additionalTxSecretKeys !== undefined) Object.freeze(txKeys.additionalTxSecretKeys);
-        }
-        const result = tx.generateOutputs(destinations, txKeys);
-        assert.deepStrictEqual(Object.keys(result).sort(), ['outputs', 'txKeys']);
-        assert.deepStrictEqual(Object.keys(result.txKeys).sort(), ['additionalTxPublicKeys', 'additionalTxSecretKeys', 'txPublicKey', 'txSecretKey']);
-        assert.deepStrictEqual(txKeys, original);
-        assert.equal(typeof result.txKeys.txSecretKey, 'bigint');
-        assert.deepStrictEqual(result.txKeys.txPublicKey, crypto.secretKeyToPublicKey(result.txKeys.txSecretKey));
-        assert.equal(result.txKeys.additionalTxSecretKeys.length, destinations.length);
-        if (txKeys?.txSecretKey !== undefined) assert.equal(result.txKeys.txSecretKey, txKeys.txSecretKey);
-        if (txKeys?.additionalTxSecretKeys !== undefined) assert.deepStrictEqual(result.txKeys.additionalTxSecretKeys, txKeys.additionalTxSecretKeys);
-        assert.deepStrictEqual(tx.generateOutputs(destinations, result.txKeys), result);
-        assert.ok(recipientFinds(result, 0, standard));
-        assert.ok(recipientFinds(result, 1, sub));
-      }
-    });
-
-    it('derives public keys for the current destinations when txKeys are reused', () => {
-      const standard = stdWallet();
-      const sub = subWallet();
-      const first = tx.generateOutputs([standard, sub]);
-      const original = structuredClone(first.txKeys);
-      const reordered = tx.generateOutputs([sub, standard], first.txKeys);
-      assert.deepStrictEqual(first.txKeys, original);
-      assert.equal(reordered.txKeys.txSecretKey, first.txKeys.txSecretKey);
-      assert.deepStrictEqual(reordered.txKeys.additionalTxSecretKeys, first.txKeys.additionalTxSecretKeys);
-      assert.deepStrictEqual(reordered.txKeys.additionalTxPublicKeys, [
-        crypto.encodePoint(crypto.decodePoint(sub.publicSpendKey).multiplyUnsafe(first.txKeys.additionalTxSecretKeys[0])),
-        crypto.secretKeyToPublicKey(first.txKeys.additionalTxSecretKeys[1]),
+    it('change gets an additional key too: standard + subaddress + change', () => {
+      const a = stdWallet();
+      const s = subWallet();
+      const sender = stdWallet();
+      const change = { ...sender, isChange: true };
+      const out = tx.generateOutputs([a, s, change], fixedKeys([17n, 19n, 23n, 29n]), sender.secretView);
+      assert.deepStrictEqual(out.txKeys.txPublicKey, crypto.secretKeyToPublicKey(17n));
+      assert.deepStrictEqual(out.txKeys.additionalTxPublicKeys, [
+        crypto.secretKeyToPublicKey(19n),
+        crypto.encodePoint(crypto.decodePoint(s.publicSpendKey).multiplyUnsafe(23n)),
+        crypto.secretKeyToPublicKey(29n),
       ]);
-      assert.ok(recipientFinds(reordered, 0, sub));
-      assert.ok(recipientFinds(reordered, 1, standard));
-
-      const singleSub = tx.generateOutputs([sub], first.txKeys);
-      assert.deepStrictEqual(singleSub.txKeys.txPublicKey, crypto.encodePoint(crypto.decodePoint(sub.publicSpendKey).multiplyUnsafe(first.txKeys.txSecretKey)));
-      assert.deepStrictEqual(singleSub.txKeys.additionalTxPublicKeys, []);
-      assert.deepStrictEqual(singleSub.txKeys.additionalTxSecretKeys, []);
-      assert.ok(recipientFinds(singleSub, 0, sub));
+      assert.ok(recipientFinds(out, 0, a));
+      assert.ok(recipientFinds(out, 1, s));
+      assert.ok(recipientFinds(out, 2, sender));
     });
   });
 
@@ -544,7 +494,7 @@ describe('tx', () => {
     });
 
     for (const type of ['address', 'subaddress']) {
-      it(`uses the supplied main key for a single ${type} and ignores unneeded additional keys`, () => {
+      it(`takes only the main key from the generator for a single ${type}`, () => {
         const recipient = stdWallet();
         recipient.type = type;
         if (type === 'subaddress') {
@@ -559,7 +509,7 @@ describe('tx', () => {
           }],
           secretSpendKey: 0n,
           secretViewKey: sender.secretView,
-          txKeys: { txSecretKey, additionalTxSecretKeys: [19n] },
+          generateTxSecretKey: fixedKeys([txSecretKey]),
           shuffleOutputs: false,
         });
         assert.strictEqual(result.txKeys.txSecretKey, txSecretKey);
@@ -596,10 +546,11 @@ describe('tx', () => {
               ...sender, isChange: true, amount: 9n,
             },
           ];
-          const params = {
+          // each call gets a fresh generator, so prepare and create draw the same keys
+          const params = () => ({
             inputs: [input], outputs, secretSpendKey: 0n, secretViewKey: sender.secretView, shuffleOutputs,
-            txKeys: supplied ? { txSecretKey: 17n, additionalTxSecretKeys: [19n, 23n, 29n] } : undefined,
-          };
+            generateTxSecretKey: supplied ? fixedKeys([17n, 19n, 23n, 29n]) : undefined,
+          });
           let prepared;
           let created;
           let randomCalls = 0;
@@ -612,10 +563,10 @@ describe('tx', () => {
             return bytes;
           });
           try {
-            prepared = tx.prepareTransaction(params);
+            prepared = tx.prepareTransaction(params());
             const prepareCalls = randomCalls;
             randomCalls = 0;
-            created = tx.createTransaction(params);
+            created = tx.createTransaction(params());
             assert.equal(randomCalls, prepareCalls);
           } finally {
             crypto.__mockRandomBytes__(randomBytes);
@@ -623,8 +574,8 @@ describe('tx', () => {
           assert.deepStrictEqual(created.bytes, raw.fullTransaction.encode(prepared.transaction));
           assert.deepStrictEqual(created.txKeys, prepared.txKeys);
           if (supplied) {
-            assert.strictEqual(created.txKeys.txSecretKey, params.txKeys.txSecretKey);
-            assert.deepStrictEqual(created.txKeys.additionalTxSecretKeys, params.txKeys.additionalTxSecretKeys);
+            assert.strictEqual(created.txKeys.txSecretKey, 17n);
+            assert.deepStrictEqual(created.txKeys.additionalTxSecretKeys, [19n, 23n, 29n]);
           }
           const decoded = raw.fullTransaction.decode(created.bytes);
           const extra = tx.parseTxExtra(decoded.prefix.extra);
@@ -690,7 +641,7 @@ describe('tx', () => {
       assert.deepStrictEqual(outputs, snapshot);
     });
 
-    it('requires one additional key for every mixed output, including change or dummy', () => {
+    it('uses one additional key for every mixed output, including change or dummy', () => {
       const sender = stdWallet();
       const sub = stdWallet();
       sub.type = 'subaddress';
@@ -704,12 +655,8 @@ describe('tx', () => {
           secretSpendKey: 0n,
           secretViewKey: sender.secretView,
         };
-        for (const additionalTxSecretKeys of [[], [11n, 13n], [11n, 13n, 17n, 19n]]) {
-          assert.throws(() => tx.prepareTransaction({ ...params, txKeys: { additionalTxSecretKeys } }), {
-            message: `generateOutputs: additionalTxSecretKeys: expected 3, got ${additionalTxSecretKeys.length}`,
-          });
-        }
-        const result = tx.prepareTransaction({ ...params, txKeys: { additionalTxSecretKeys: [11n, 13n, 17n] } });
+        const result = tx.prepareTransaction({ ...params, generateTxSecretKey: fixedKeys([7n, 11n, 13n, 17n]) });
+        assert.equal(result.txKeys.txSecretKey, 7n);
         assert.deepStrictEqual(result.txKeys.additionalTxSecretKeys, [11n, 13n, 17n]);
         assert.equal(tx.parseTxExtra(result.transaction.prefix.extra).additionalTxPublicKeys.length, 3);
       }
@@ -838,7 +785,7 @@ describe('tx', () => {
         },
       ];
       const { bytes, txKeys } = tx.createTransaction({
-        inputs, outputs, secretSpendKey: 0n, secretViewKey: sender.secretView, txKeys: { txSecretKey: 17n },
+        inputs, outputs, secretSpendKey: 0n, secretViewKey: sender.secretView, generateTxSecretKey: fixedKeys([17n]),
       });
       const { encryptedPaymentId, txPublicKeys: [txPublicKey] } = tx.parseTxExtra(raw.fullTransaction.decode(bytes).prefix.extra);
       assert.equal(txKeys.txSecretKey, 17n);
@@ -889,12 +836,9 @@ describe('tx', () => {
           secretViewKey: scalar(construct.secretViewKey),
           unlockTime: BigInt(construct.unlockTime),
           shuffleOutputs: construct.shuffleOutputs,
-          ...(construct.generatedTxKeys ? {} : {
-            txKeys: {
-              txSecretKey: scalar(construct.txKeys.txSecretKey),
-              additionalTxSecretKeys: construct.txKeys.additionalTxSecretKeys.map(scalar),
-            },
-          }),
+          generateTxSecretKey: construct.generatedTxKeys
+            ? undefined
+            : fixedKeys([construct.txKeys.txSecretKey, ...construct.txKeys.additionalTxSecretKeys].map(scalar)),
         });
 
         assert.strictEqual(bytesToHex(bytes), fixture.hex);
