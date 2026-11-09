@@ -1,6 +1,6 @@
 import { keccakP } from '@noble/hashes/sha3.js';
 
-import * as crypto from '../lib/crypto.js';
+import * as crypto from '../../lib/crypto.js';
 
 /**
  * Install monero's unit-test random source: a 200-byte keccak state filled with 42, permuted once

@@ -1,13 +1,23 @@
 import assert from 'node:assert/strict';
 import {
   bytesToHex,
-  concatBytes,
   hexToBytes,
+  utf8ToBytes,
 } from '@noble/hashes/utils.js';
 import { describe, it } from 'node:test';
 
 import * as epee from '../lib/epee.js';
+import blockFixtures from './fixtures/blocks.json' with { type: 'json' };
 import getblocksFixtures from './fixtures/getblocks.json' with { type: 'json' };
+
+// Signatures 0x01011101 and 0x01020101 in little-endian, then format version 1.
+// https://github.com/monero-project/monero/blob/v0.18.5.1/docs/PORTABLE_STORAGE.md#header
+const HEADER = '011101010101020101';
+
+const hexOf = (text) => bytesToHex(utf8ToBytes(text));
+
+// The decoder makes null-prototype sections, so the expected sections must have the same prototype.
+const section = (fields) => Object.assign(Object.create(null), fields);
 
 describe('epee', () => {
   describe('encode', () => {
@@ -24,9 +34,48 @@ describe('epee', () => {
       assert.equal(bytesToHex(req), requestHex);
     });
 
+    // https://github.com/monero-project/monero/blob/v0.18.5.1/docs/PORTABLE_STORAGE.md#strings
+    it('encodes a section key and a string as the monero spec shows them', () => {
+      assert.equal(bytesToHex(epee.encode({ Howdy: 'Howdy' })), `${HEADER}04${'05486f776479'}0a${'14486f776479'}`);
+    });
+
+    // https://github.com/monero-project/monero/blob/v0.18.5.1/docs/PORTABLE_STORAGE.md#represenations-of-example-values
+    it('encodes 1, 2 and 4 byte string lengths as the monero spec shows them', () => {
+      for (const [length, varint] of [[0, '00'], [7, '1c'], [101, '9501'], [17000, 'a2090100']]) {
+        const value = new Uint8Array(length).fill(0x61);
+        assert.equal(bytesToHex(epee.encode({ a: value })), `${HEADER}040161${'0a'}${varint}${bytesToHex(value)}`, `${length}`);
+      }
+    });
+
+    // https://github.com/monero-project/monero/blob/v0.18.5.1/docs/PORTABLE_STORAGE.md#byte-sizes
+    it('switches the length size at the limits of the monero spec table', () => {
+      for (const [length, varint] of [[63, 'fc'], [64, '0101'], [16383, 'fdff'], [16384, '02000100']]) {
+        const value = new Uint8Array(length).fill(0x61);
+        const hex = `${HEADER}040161${'0a'}${varint}${bytesToHex(value)}`;
+        assert.equal(bytesToHex(epee.encode({ a: value })), hex, `${length}`);
+        assert.deepEqual(epee.decode(hexToBytes(hex)).a, value);
+      }
+    });
+
+    it('encodes a bool', () => {
+      const hex = [
+        HEADER, '08',
+        '0174', '0b', '01', // t
+        '0166', '0b', '00', // f
+      ].join('');
+      assert.equal(bytesToHex(epee.encode({ t: true, f: false })), hex);
+    });
+
     it('rejects values it cannot infer a wire type for', () => {
-      assert.throws(() => epee.encode({ x: [1, 2] }));
-      assert.throws(() => epee.encode({ x: null }));
+      assert.throws(() => {
+        epee.encode({ x: [1, 2] });
+      });
+      assert.throws(() => {
+        epee.encode({ x: null });
+      });
+      assert.throws(() => {
+        epee.encode({ x: 1 });
+      });
     });
   });
 
@@ -34,123 +83,124 @@ describe('epee', () => {
     it('decodes a real get_blocks.bin response captured from a live regtest node', () => {
       const [{ responseHex }] = getblocksFixtures;
       const res = epee.decode(hexToBytes(responseHex));
-      assert.equal(res.status.length, 2); // "OK" as raw bytes (Uint8Array)
-      assert.equal(Buffer.from(res.status).toString(), 'OK');
+      assert.deepEqual(res.status, utf8ToBytes('OK'));
       assert.equal(res.current_height, 1770n);
       assert.equal(res.start_height, 0n);
+      // the first two block blobs are the genesis and height 1 fixtures of blocks.json
       assert.equal(res.blocks.length, 3);
-      for (const block of res.blocks) {
-        assert.ok(block.block instanceof Uint8Array);
-      }
-      // output_indices exercises 3 levels of nesting: array of objects, each containing an array
-      // of objects, each containing an array of uint64 - the actual shape get_blocks.bin returns.
-      assert.equal(res.output_indices.length, 3);
-      assert.equal(typeof res.output_indices[0].indices[0].indices[0], 'bigint');
+      assert.equal(bytesToHex(res.blocks[0].block), blockFixtures[0].hex);
+      assert.equal(bytesToHex(res.blocks[1].block), blockFixtures[1].hex);
+      assert.deepEqual(res.output_indices, [
+        section({ indices: [section({ indices: [0n] })] }),
+        section({ indices: [section({ indices: [0n] })] }),
+        section({ indices: [section({ indices: [1n] })] }),
+      ]);
+    });
+
+    // https://github.com/monero-project/monero/blob/v0.18.5.1/docs/PORTABLE_STORAGE.md#overall-example
+    it('decodes the overall example of the monero spec', () => {
+      const hex = '011101010101020101140b73686f72745f71756f74650a8447697665206d65206c696265727479206f722067697665206d65206465617468210a6c6f6e675f71756f74650a41014d6f6e65726f206973206d6f7265207468616e206a757374206120746563686e6f6c6f67792e204974277320616c736f20776861742074686520746563686e6f6c6f6779207374616e647320666f722e107369676e65645f33326269745f696e7402825133010e61727261795f6f665f626f6f6c738b10010001010e6e65737465645f73656374696f6e0c0806646f75626c65099a99999999991bc012756e7369676e65645f36346269745f696e7405c771acb5af98329a';
+      assert.deepEqual(epee.decode(hexToBytes(hex)), section({
+        short_quote: utf8ToBytes('Give me liberty or give me death!'),
+        long_quote: utf8ToBytes('Monero is more than just a technology. It\'s also what the technology stands for.'),
+        signed_32bit_int: 20140418,
+        array_of_bools: [true, false, true, true],
+        nested_section: section({
+          double: -6.9,
+          unsigned_64bit_int: 11111111111111111111n,
+        }),
+      }));
+    });
+
+    it('decodes every integer tag, with negative signed values', () => {
+      const hex = [
+        HEADER, '1c',
+        '026938', '04', 'ff', // i8
+        '03693136', '03', 'feff', // i16
+        '03693332', '02', 'fdffffff', // i32
+        '03693634', '01', 'fcffffffffffffff', // i64
+        '027538', '08', 'c8', // u8
+        '03753136', '07', '0001', // u16
+        '03753332', '06', '70110100', // u32
+      ].join('');
+      assert.deepEqual(epee.decode(hexToBytes(hex)), section({
+        i8: -1, i16: -2, i32: -3, i64: -4n, u8: 200, u16: 256, u32: 70000,
+      }));
+    });
+
+    it('decodes a bool', () => {
+      const hex = [
+        HEADER, '08',
+        '0174', '0b', '01', // t
+        '0166', '0b', '00', // f
+      ].join('');
+      assert.deepEqual(epee.decode(hexToBytes(hex)), section({ t: true, f: false }));
+    });
+
+    // https://github.com/monero-project/monero/blob/v0.18.5.1/tests/data/fuzz/load-from-binary/BINARY1
+    it('decodes an empty section', () => {
+      assert.deepEqual(epee.decode(hexToBytes(`${HEADER}00`)), section({}));
+    });
+
+    // https://github.com/monero-project/monero/blob/v0.18.5.1/tests/unit_tests/epee_serialization.cpp#L39-L48
+    it('decodes two keys', () => {
+      assert.deepEqual(epee.decode(hexToBytes(`${HEADER}08${'0161'}0b00${'0162'}0b00`)), section({ a: false, b: false }));
+    });
+
+    // https://github.com/monero-project/monero/blob/v0.18.5.1/tests/unit_tests/epee_serialization.cpp#L50-L59
+    it('rejects a duplicate key', () => {
+      assert.throws(() => {
+        epee.decode(hexToBytes(`${HEADER}08${'0161'}0b00${'0161'}0b00`));
+      }, /duplicate section field name/);
     });
 
     it('rejects a bad header signature', () => {
-      const bytes = hexToBytes('00000000000000000100');
-      assert.throws(() => epee.decode(bytes));
-    });
-
-    it('round-trips the encoder-inferred types (bigint, bool, bytes)', () => {
-      const encoded = epee.encode({
-        a: 1n, b: true, c: new Uint8Array([1, 2, 3]),
+      assert.throws(() => {
+        epee.decode(hexToBytes('00000000000000000100'));
       });
-      const decoded = epee.decode(encoded);
-      assert.equal(decoded.a, 1n);
-      assert.equal(decoded.b, true);
-      assert.deepEqual(decoded.c, new Uint8Array([1, 2, 3]));
     });
 
-    // build a portable-storage blob by hand: header + a section of { name, tag, value } fields.
-    // field count and name lengths stay small so their prefixes are a single byte.
-    const HEADER = epee.encode({}).subarray(0, 9); // signatures + format version
-    const storage = (fields) => concatBytes(
-      HEADER,
-      Uint8Array.of(fields.length << 2), // epee varint: section field count
-      ...fields.flatMap(({
-        name, tag, value,
-      }) => {
-        const nameBytes = new TextEncoder().encode(name);
-        return [Uint8Array.of(nameBytes.length), nameBytes, Uint8Array.of(tag), value];
-      })
-    );
-    const scalar = (tag, size, write) => {
-      const value = new Uint8Array(size);
-      write(new DataView(value.buffer));
-      return { tag, value };
-    };
-
-    it('decodes every scalar tag from explicit bytes', () => {
-      const decoded = epee.decode(storage([
-        {
-          name: 'i8', tag: epee.Tag.INT8, value: Uint8Array.of(0xff),
-        },
-        { name: 'i16', ...scalar(epee.Tag.INT16, 2, (dv) => dv.setInt16(0, -2, true)) },
-        { name: 'i32', ...scalar(epee.Tag.INT32, 4, (dv) => dv.setInt32(0, -3, true)) },
-        { name: 'i64', ...scalar(epee.Tag.INT64, 8, (dv) => dv.setBigInt64(0, -4n, true)) },
-        {
-          name: 'u8', tag: epee.Tag.UINT8, value: Uint8Array.of(200),
-        },
-        { name: 'u16', ...scalar(epee.Tag.UINT16, 2, (dv) => dv.setUint16(0, 256, true)) },
-        { name: 'u32', ...scalar(epee.Tag.UINT32, 4, (dv) => dv.setUint32(0, 70000, true)) },
-        { name: 'u64', ...scalar(epee.Tag.UINT64, 8, (dv) => dv.setBigUint64(0, 123n, true)) },
-        { name: 'd', ...scalar(epee.Tag.DOUBLE, 8, (dv) => dv.setFloat64(0, 1.5, true)) },
-        {
-          name: 'bool', tag: epee.Tag.BOOL, value: Uint8Array.of(1),
-        },
-      ]));
-      assert.equal(decoded.i8, -1);
-      assert.equal(decoded.i16, -2);
-      assert.equal(decoded.i32, -3);
-      assert.equal(decoded.u8, 200);
-      assert.equal(decoded.u16, 256);
-      assert.equal(decoded.u32, 70000);
-      assert.equal(decoded.u64, 123n);
-      assert.equal(decoded.bool, true);
-      assert.equal(decoded.i64, -4n);
-      assert.equal(decoded.d, 1.5);
+    it('rejects an empty key', () => {
+      assert.throws(() => {
+        epee.decode(hexToBytes(`${HEADER}04${'00'}0801`));
+      }, /empty section field name/);
     });
 
-    it('rejects an empty section field name', () => {
-      assert.throws(() => epee.decode(storage([
-        {
-          name: '', tag: epee.Tag.UINT8, value: Uint8Array.of(1),
-        },
-      ])), /empty section field name/);
+    it('rejects an unknown type tag', () => {
+      assert.throws(() => {
+        epee.decode(hexToBytes(`${HEADER}04${'0161'}0e00`));
+      });
     });
 
-    it('rejects a duplicate section field name', () => {
-      assert.throws(() => epee.decode(storage([
-        {
-          name: 'a', tag: epee.Tag.UINT8, value: Uint8Array.of(1),
-        },
-        {
-          name: 'a', tag: epee.Tag.UINT8, value: Uint8Array.of(2),
-        },
-      ])), /duplicate section field name/);
+    it('rejects an untyped array, which monero does not produce', () => {
+      assert.throws(() => {
+        epee.decode(hexToBytes(`${HEADER}04${'0161'}0d00`));
+      });
     });
 
+    it('rejects truncated data', () => {
+      assert.throws(() => {
+        epee.decode(hexToBytes(`${HEADER}04${'0161'}0a14${hexOf('How')}`));
+      });
+    });
+
+    // An 8-byte string length (7942319744 from the spec table) with no string bytes after it.
+    it('rejects a string length larger than the data', () => {
+      assert.throws(() => {
+        epee.decode(hexToBytes(`${HEADER}04${'0161'}0a03ba986507000000`));
+      });
+    });
+
+    // https://github.com/monero-project/monero/blob/v0.18.5.1/contrib/epee/include/storages/portable_storage_from_bin.h#L39-L43
     it('rejects nesting past the recursion limit', () => {
-      let inner = Uint8Array.of(0x00); // innermost: an empty section (0 fields)
-      for (let i = 0; i < 101; i++) {
-        inner = concatBytes(
-          Uint8Array.of(1 << 2), // 1 field
-          Uint8Array.of(1), new TextEncoder().encode('a'),
-          Uint8Array.of(epee.Tag.OBJECT),
-          inner
-        );
-      }
-      assert.throws(() => epee.decode(concatBytes(HEADER, inner)), /recursion limit/);
+      const hex = `${HEADER}${`04${'0161'}0c`.repeat(101)}00`;
+      assert.throws(() => {
+        epee.decode(hexToBytes(hex));
+      }, /recursion limit/);
     });
 
-    it('stores a __proto__ field as a safe own property', () => {
-      const decoded = epee.decode(storage([
-        {
-          name: '__proto__', tag: epee.Tag.UINT8, value: Uint8Array.of(42),
-        },
-      ]));
+    it('stores a __proto__ key as a safe own property', () => {
+      const decoded = epee.decode(hexToBytes(`${HEADER}04${'09'}${hexOf('__proto__')}082a`));
       assert.equal(Object.getPrototypeOf(decoded), null);
       assert.equal(Object.getOwnPropertyDescriptor(decoded, '__proto__').value, 42);
     });

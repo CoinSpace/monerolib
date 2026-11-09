@@ -1,4 +1,3 @@
-/* eslint-disable max-len */
 import assert from 'node:assert/strict';
 import { randomBytes } from '@noble/hashes/utils.js';
 import { describe, it } from 'node:test';
@@ -35,7 +34,7 @@ describe('coinselect', () => {
   const total = (arr) => arr.reduce((s, x) => s + x.amount, 0n);
   const fixedSum = (dsts) => dsts.reduce((s, d) => s + (d.amount ?? 0n), 0n);
 
-  // the exact fee selectInputs must compute for a given input count and output list
+  // the exact fee selectInputs must compute; estimateFee has its own fixed vectors in test/tx.js
   const feeFor = (nInputs, outputList) => tx.estimateFee(
     nInputs, MIXIN, outputList.length, tx.estimateExtraSize(outputList), BASE_FEE, FEE_MULTIPLIER, FEE_QUANTIZATION
   );
@@ -121,13 +120,19 @@ describe('coinselect', () => {
     });
 
     it('throws when funds cannot cover amount + fee', () => {
-      assert.throws(() => select([{ amount: 1_000n }], [addr(1_000_000_000_000n)]), /not enough funds/);
+      assert.throws(() => {
+        select([{ amount: 1_000n }], [addr(1_000_000_000_000n)]);
+      }, /not enough funds/);
     });
 
     it('too many small inputs: transaction too large; total too small: not enough funds', () => {
       const candidates = Array.from({ length: 300 }, () => ({ amount: 1_000_000_000n }));
-      assert.throws(() => select(candidates, [addr(200_000_000_000n)]), /transaction too large/);
-      assert.throws(() => select(candidates, [addr(301_000_000_000n)]), /not enough funds/);
+      assert.throws(() => {
+        select(candidates, [addr(200_000_000_000n)]);
+      }, /transaction too large/);
+      assert.throws(() => {
+        select(candidates, [addr(301_000_000_000n)]);
+      }, /not enough funds/);
     });
   });
 
@@ -169,13 +174,17 @@ describe('coinselect', () => {
     });
 
     it('throws when funds cannot cover fixed + fee', () => {
-      assert.throws(() => select([{ amount: 1_000n }], [addr(1_000_000_000_000n), addr()]), /not enough funds/);
+      assert.throws(() => {
+        select([{ amount: 1_000n }], [addr(1_000_000_000_000n), addr()]);
+      }, /not enough funds/);
     });
 
     it('takes the largest candidates that fit in TX_WEIGHT_TARGET', () => {
       const dst = addr();
       const outputs = [dst, { isChange: true }];
-      const candidates = Array.from({ length: 300 }, (_, i) => ({ amount: BigInt((i * 7919) % 300 + 1) * 1_000_000_000n }));
+      const candidates = Array.from({ length: 300 }, (_, i) => ({
+        amount: BigInt((i * 7919) % 300 + 1) * 1_000_000_000n,
+      }));
       const res = select(candidates, [dst]);
       const k = res.selected.length;
       assert.ok(k < candidates.length);
@@ -192,7 +201,12 @@ describe('coinselect', () => {
       const dst = addr();
       const candidates = Array.from({ length: 300 }, () => ({ amount: 1_000_000_000n }));
       const res = coinselect.selectInputs({
-        candidates, destinations: [dst], ringSize: RING_SIZE, baseFee: BASE_FEE, feeQuantization: FEE_QUANTIZATION, maxWeight: weightFor(10, [dst, { isChange: true }]),
+        candidates,
+        destinations: [dst],
+        ringSize: RING_SIZE,
+        baseFee: BASE_FEE,
+        feeQuantization: FEE_QUANTIZATION,
+        maxWeight: weightFor(10, [dst, { isChange: true }]),
       });
       assert.equal(res.selected.length, 10);
     });
@@ -210,12 +224,16 @@ describe('coinselect', () => {
 
   describe('validation', () => {
     it('throws on empty destinations', () => {
-      assert.throws(() => select([{ amount: 1n }], []), /no destinations/);
+      assert.throws(() => {
+        select([{ amount: 1n }], []);
+      }, /no destinations/);
     });
 
     it('throws when a destination is a change output', () => {
       const dst = { ...addr(1_000n), isChange: true };
-      assert.throws(() => select([{ amount: 5_000_000_000_000n }], [dst]), /must not include change/);
+      assert.throws(() => {
+        select([{ amount: 5_000_000_000_000n }], [dst]);
+      }, /must not include change/);
     });
   });
 
@@ -224,7 +242,12 @@ describe('coinselect', () => {
       const dst = addr(1_000_000_000_000n);
       const candidates = [{ amount: 5_000_000_000_000n }];
       const small = coinselect.selectInputs({
-        candidates, destinations: [dst], ringSize: 4, baseFee: BASE_FEE, feeQuantization: FEE_QUANTIZATION, feeMultiplier: FEE_MULTIPLIER,
+        candidates,
+        destinations: [dst],
+        ringSize: 4,
+        baseFee: BASE_FEE,
+        feeQuantization: FEE_QUANTIZATION,
+        feeMultiplier: FEE_MULTIPLIER,
       });
       const big = select(candidates, [dst]); // ringSize 16
       assert.ok(big.fee > small.fee);

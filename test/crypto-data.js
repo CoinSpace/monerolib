@@ -1,6 +1,6 @@
-/* eslint-disable max-len */
 import { FpSqrtEven } from '@noble/curves/abstract/modular.js';
 import assert from 'node:assert/strict';
+import { bytesToHex } from '@noble/hashes/utils.js';
 import { describe, it } from 'node:test';
 
 import * as crypto from '../lib/crypto.js';
@@ -31,19 +31,31 @@ describe('crypto-data', () => {
     });
 
     it('fffb1 = sqrt(-2 * A * (A + 2))', () => {
-      assert.equal(cryptoData.fffb1, FpSqrtEven(crypto.Fp, crypto.Fp.mul(crypto.Fp.mul(crypto.Fp.add(cryptoData.A, 2n), cryptoData.A), crypto.Fp.neg(2n))));
+      assert.equal(cryptoData.fffb1, FpSqrtEven(crypto.Fp, crypto.Fp.mul(
+        crypto.Fp.mul(crypto.Fp.add(cryptoData.A, 2n), cryptoData.A),
+        crypto.Fp.neg(2n)
+      )));
     });
 
     it('fffb2 = sqrt(2 * A * (A + 2))', () => {
-      assert.equal(cryptoData.fffb2, FpSqrtEven(crypto.Fp, crypto.Fp.mul(crypto.Fp.mul(crypto.Fp.add(cryptoData.A, 2n), cryptoData.A), 2n)));
+      assert.equal(cryptoData.fffb2, FpSqrtEven(crypto.Fp, crypto.Fp.mul(
+        crypto.Fp.mul(crypto.Fp.add(cryptoData.A, 2n), cryptoData.A),
+        2n
+      )));
     });
 
     it('fffb3 = sqrt(-sqrt(-1) * A * (A + 2))', () => {
-      assert.equal(cryptoData.fffb3, FpSqrtEven(crypto.Fp, crypto.Fp.mul(crypto.Fp.mul(crypto.Fp.add(cryptoData.A, 2n), cryptoData.A), crypto.Fp.neg(cryptoData.sqrtm1))));
+      assert.equal(cryptoData.fffb3, FpSqrtEven(crypto.Fp, crypto.Fp.mul(
+        crypto.Fp.mul(crypto.Fp.add(cryptoData.A, 2n), cryptoData.A),
+        crypto.Fp.neg(cryptoData.sqrtm1)
+      )));
     });
 
     it('fffb4 = sqrt(sqrt(-1) * A * (A + 2))', () => {
-      assert.equal(cryptoData.fffb4, FpSqrtEven(crypto.Fp, crypto.Fp.mul(crypto.Fp.mul(crypto.Fp.add(cryptoData.A, 2n), cryptoData.A), cryptoData.sqrtm1)));
+      assert.equal(cryptoData.fffb4, FpSqrtEven(crypto.Fp, crypto.Fp.mul(
+        crypto.Fp.mul(crypto.Fp.add(cryptoData.A, 2n), cryptoData.A),
+        cryptoData.sqrtm1
+      )));
     });
   });
 
@@ -56,27 +68,37 @@ describe('crypto-data', () => {
 
     // https://github.com/monero-project/monero/blob/v0.18.5.0/src/crypto/crypto-ops-data.c#L38
     it('sqrtm1', () => {
-      assert.equal(cryptoData.sqrtm1, feToBigInt([-32595792, -7943725, 9377950, 3500415, 12389472, -272473, -25146209, -2005654, 326686, 11406482]));
+      assert.equal(cryptoData.sqrtm1, feToBigInt([
+        -32595792, -7943725, 9377950, 3500415, 12389472, -272473, -25146209, -2005654, 326686, 11406482,
+      ]));
     });
 
     // https://github.com/monero-project/monero/blob/v0.18.5.0/src/crypto/crypto-ops-data.c#L869
     it('fffb1', () => {
-      assert.equal(cryptoData.fffb1, feToBigInt([-31702527, -2466483, -26106795, -12203692, -12169197, -321052, 14850977, -10296299, -16929438, -407568]));
+      assert.equal(cryptoData.fffb1, feToBigInt([
+        -31702527, -2466483, -26106795, -12203692, -12169197, -321052, 14850977, -10296299, -16929438, -407568,
+      ]));
     });
 
     // https://github.com/monero-project/monero/blob/v0.18.5.0/src/crypto/crypto-ops-data.c#L870
     it('fffb2', () => {
-      assert.equal(cryptoData.fffb2, feToBigInt([8166131, -6741800, -17040804, 3154616, 21461005, 1466302, -30876704, -6368709, 10503587, -13363080]));
+      assert.equal(cryptoData.fffb2, feToBigInt([
+        8166131, -6741800, -17040804, 3154616, 21461005, 1466302, -30876704, -6368709, 10503587, -13363080,
+      ]));
     });
 
     // https://github.com/monero-project/monero/blob/v0.18.5.0/src/crypto/crypto-ops-data.c#L871
     it('fffb3', () => {
-      assert.equal(cryptoData.fffb3, feToBigInt([-13620103, 14639558, 4532995, 7679154, 16815101, -15883539, -22863840, -14813421, 13716513, -6477756]));
+      assert.equal(cryptoData.fffb3, feToBigInt([
+        -13620103, 14639558, 4532995, 7679154, 16815101, -15883539, -22863840, -14813421, 13716513, -6477756,
+      ]));
     });
 
     // https://github.com/monero-project/monero/blob/v0.18.5.0/src/crypto/crypto-ops-data.c#L872
     it('fffb4', () => {
-      assert.equal(cryptoData.fffb4, feToBigInt([-21786234, -12173074, 21573800, 4524538, -4645904, 16204591, 8012863, -8444712, 3212926, 6885324]));
+      assert.equal(cryptoData.fffb4, feToBigInt([
+        -21786234, -12173074, 21573800, 4524538, -4645904, 16204591, 8012863, -8444712, 3212926, 6885324,
+      ]));
     });
   });
 
@@ -89,10 +111,20 @@ describe('crypto-data', () => {
       assert.ok(cryptoData.H.equals(derived));
     });
 
+    // https://github.com/monero-project/monero/blob/v0.18.5.1/tests/unit_tests/ringct.cpp#L1194-L1202
+    it('H matches monero', () => {
+      assert.equal(bytesToHex(crypto.encodePoint(cryptoData.H)), '8b655970153799af2aeadc9ff1add0ea6c7251d54154cfa92c173a0dd39c1f94');
+    });
+
     // INV_EIGHT = 1/8 mod l
     // https://github.com/monero-project/monero/blob/v0.18.5.0/src/ringct/rctOps.h#L67
     it('INV_EIGHT is 1/8 mod l', () => {
       assert.equal(cryptoData.INV_EIGHT, crypto.Fn.inv(8n));
+    });
+
+    // https://github.com/monero-project/monero/blob/v0.18.5.1/tests/unit_tests/ringct.cpp#L1240-L1253
+    it('8 * (INV_EIGHT * H) = H', () => {
+      assert.ok(cryptoData.H.multiply(cryptoData.INV_EIGHT).multiply(8n).equals(cryptoData.H));
     });
   });
 });

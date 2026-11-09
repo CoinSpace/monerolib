@@ -1,4 +1,3 @@
-/* eslint-disable max-len */
 import assert from 'node:assert';
 import fs from 'fs/promises';
 import {
@@ -8,11 +7,16 @@ import { bytesToHex, hexToBytes } from '@noble/hashes/utils.js';
 
 import * as crypto from '../lib/crypto.js';
 import * as helpers from '../lib/helpers.js';
+import { address } from '../lib/address.js';
 
-import { mockRandomBytes } from './mock-random.js';
+import { KNACCC_WALLET } from './helpers/wallets.js';
+import { mockRandomBytes } from './helpers/mock-random.js';
+import { constructFixtures, ownerDerivation } from './helpers/construct.js';
 
 // https://github.com/monero-project/monero/blob/v0.18.5.0/tests/crypto/tests.txt
-const tests = (await fs.readFile('./test/fixtures/tests.txt', { encoding: 'utf8' })).split('\n');
+const tests = (await fs.readFile('./test/fixtures/tests.txt', { encoding: 'utf8' })).trim().split('\n');
+// https://github.com/monero-project/monero/blob/v0.18.5.1/tests/hash/tests-fast.txt
+const hashTests = (await fs.readFile('./test/fixtures/hash_tests_fast.txt', { encoding: 'utf8' })).trim().split('\n');
 
 // The vectors below replay one shared stream, so it is started once for the whole file.
 before(mockRandomBytes);
@@ -146,7 +150,11 @@ describe('crypto', () => {
         const [derivation, index, base, expected] = rest;
         describe('deriveSecretKey', () => {
           it(`derivation '${derivation}' index '${index}' base: '${base}' to be derived '${expected}'`, () => {
-            const actual = crypto.deriveSecretKey(hexToBytes(derivation), parseInt(index), helpers.decodeInt(hexToBytes(base)));
+            const actual = crypto.deriveSecretKey(
+              hexToBytes(derivation),
+              parseInt(index),
+              helpers.decodeInt(hexToBytes(base))
+            );
             assert.strictEqual(bytesToHex(helpers.encodeInt(actual)), expected);
           });
         });
@@ -166,7 +174,11 @@ describe('crypto', () => {
         const [prefix, pub, sec, expected] = rest;
         describe('generateSignature', () => {
           it(`prefix '${prefix}' pub '${pub}' sec: '${sec}' to be signature '${expected}'`, () => {
-            const actual = crypto.generateSignature(hexToBytes(prefix), hexToBytes(pub), helpers.decodeInt(hexToBytes(sec)));
+            const actual = crypto.generateSignature(
+              hexToBytes(prefix),
+              hexToBytes(pub),
+              helpers.decodeInt(hexToBytes(sec))
+            );
             assert.strictEqual(bytesToHex(actual), expected);
           });
         });
@@ -247,106 +259,147 @@ describe('crypto', () => {
         });
         break;
       }
-      default: {
+      // The command checks the ref10 ge_p3 form, which has no JS equivalent.
+      // https://github.com/monero-project/monero/blob/v0.18.5.1/tests/crypto/crypto.cpp#L35-L63
+      case 'check_ge_p3_identity': {
         break;
+      }
+      default: {
+        throw new Error(`Unknown tests.txt command '${cmd}'`);
       }
     }
   }
 
-  // subaddress key derivation is not covered by monero's tests.txt; the (1,1) expected values are
-  // cross-checked against the monero-verified subaddress address strings in test/wallet.js
-  describe('subaddress', () => {
-    const a = helpers.decodeInt(hexToBytes('99c57d1f0f997bc8ca98559a0ccc3fada3899756e63d1516dba58b7e468cfc05'));
-    const b = helpers.decodeInt(hexToBytes('8d8c8eeca38ac3b46aa293fd519b3860e96b5f873c12a95e3e1cdeda0bac4903'));
-    const B = hexToBytes('f8631661f6ab4e6fda310c797330d86e23a682f20d5bc8cc27b18051191f16d7');
-    const A = hexToBytes('4a1535063ad1fee2dabbf909d4fd9a873e29541b401f0944754e17c9a41820ce');
-    const D = '4a3e863f2a7a43f7fbaa0320e06982009f2986dd04173eaee32aa8473317f19d';
-    const C = 'd247f90799916273407c1c71230d5ae0a9c71b8a7492da035e5e8ad972eea18b';
-
-    describe('subaddressSecret', () => {
-      it('m = Hs("SubAddr" || a || i || j) for account 1 index 1', () => {
-        const m = crypto.subaddressSecret(a, { major: 1, minor: 1 });
-        assert.strictEqual(bytesToHex(helpers.encodeInt(m)), '81dea0953b33dcaed5097a7c2b94cf5e94a5d8fa9796631331ed656da187ea01');
-      });
-      it('throws for the main account (0, 0)', () => {
-        assert.throws(() => crypto.subaddressSecret(a, { major: 0, minor: 0 }));
+  describe('fastHash', () => {
+    hashTests.forEach((line, i) => {
+      const [expected, data] = line.split(' ');
+      const input = data === 'x' ? new Uint8Array(0) : hexToBytes(data);
+      it(`vector ${i + 1}: ${input.length} bytes`, () => {
+        assert.strictEqual(bytesToHex(crypto.fastHash(input)), expected);
       });
     });
+  });
 
-    describe('subaddressPublicSpendKey', () => {
-      it('D = B + m*G for account 1 index 1', () => {
-        assert.strictEqual(bytesToHex(crypto.subaddressPublicSpendKey(a, B, { major: 1, minor: 1 })), D);
+  describe('generateSignature', () => {
+    it('throws when the public key does not belong to the secret key', () => {
+      assert.throws(() => {
+        crypto.generateSignature(new Uint8Array(32), crypto.secretKeyToPublicKey(2n), 1n);
+      }, { message: 'Incorrect public key' });
+    });
+  });
+
+  describe('generateRingSignature', () => {
+    it('throws for a secret index outside the ring', () => {
+      const pubs = [crypto.secretKeyToPublicKey(1n), crypto.secretKeyToPublicKey(2n)];
+      assert.throws(() => {
+        crypto.generateRingSignature(new Uint8Array(32), crypto.generateKeyImage(pubs[0], 1n), pubs, 1n, 2);
+      }, { message: 'Bad index of secret key' });
+    });
+  });
+
+  describe('checkRingSignature', () => {
+    it('is false when a ring member is not a valid point', () => {
+      const vector = tests.find((line) => line.startsWith('check_ring_signature') && line.endsWith(' true'));
+      const [, prefix, image, count, ...rest] = vector.split(' ');
+      const pubs = rest.slice(0, count).map(hexToBytes);
+      const sig = hexToBytes(rest[count]);
+      assert.strictEqual(crypto.checkRingSignature(hexToBytes(prefix), hexToBytes(image), pubs, sig), true);
+      pubs[0] = new Uint8Array(32).fill(0xff);
+      assert.strictEqual(crypto.checkRingSignature(hexToBytes(prefix), hexToBytes(image), pubs, sig), false);
+    });
+  });
+
+  describe('subaddress keys', () => {
+    const a = helpers.decodeInt(KNACCC_WALLET.secretViewKey);
+    const b = helpers.decodeInt(KNACCC_WALLET.secretSpendKey);
+    const B = KNACCC_WALLET.publicSpendKey;
+    const A = KNACCC_WALLET.publicViewKey;
+
+    for (const { index, address: subaddress } of KNACCC_WALLET.subaddresses) {
+      const { publicSpendKey: D, publicViewKey: C } = address('mainnet').decode(subaddress);
+      const name = `(${index.major}, ${index.minor})`;
+
+      it(`subaddressSecret ${name}: m*G = D - B`, () => {
+        const m = crypto.subaddressSecret(a, index);
+        assert.ok(crypto.Point.BASE.multiply(m).equals(crypto.decodePoint(D).subtract(crypto.decodePoint(B))));
       });
-      it('returns B for the main account (0, 0)', () => {
-        assert.deepStrictEqual(crypto.subaddressPublicSpendKey(a, B, { major: 0, minor: 0 }), B);
+
+      it(`subaddressPublicSpendKey ${name}: D`, () => {
+        assert.deepStrictEqual(crypto.subaddressPublicSpendKey(a, B, index), D);
       });
+
+      it(`subaddressSecretSpendKey ${name}: (b + m)*G = D`, () => {
+        assert.deepStrictEqual(crypto.secretKeyToPublicKey(crypto.subaddressSecretSpendKey(a, b, index)), D);
+      });
+
+      it(`subaddressPublicKeys ${name}: D and C = a*D`, () => {
+        assert.deepStrictEqual(crypto.subaddressPublicKeys(a, B, index), { publicSpendKey: D, publicViewKey: C });
+      });
+    }
+
+    it('subaddress (1, 1): m, D and C', () => {
+      const index = { major: 1, minor: 1 };
+      const D = hexToBytes('4a3e863f2a7a43f7fbaa0320e06982009f2986dd04173eaee32aa8473317f19d');
+      const C = hexToBytes('d247f90799916273407c1c71230d5ae0a9c71b8a7492da035e5e8ad972eea18b');
+      assert.strictEqual(bytesToHex(helpers.encodeInt(crypto.subaddressSecret(a, index))), '81dea0953b33dcaed5097a7c2b94cf5e94a5d8fa9796631331ed656da187ea01');
+      assert.deepStrictEqual(crypto.subaddressPublicSpendKey(a, B, index), D);
+      assert.deepStrictEqual(crypto.secretKeyToPublicKey(crypto.subaddressSecretSpendKey(a, b, index)), D);
+      assert.deepStrictEqual(crypto.subaddressPublicKeys(a, B, index), { publicSpendKey: D, publicViewKey: C });
     });
 
-    describe('subaddressSecretSpendKey', () => {
-      it('d = b + m, and d*G == D for account 1 index 1', () => {
-        const d = crypto.subaddressSecretSpendKey(a, b, { major: 1, minor: 1 });
-        assert.strictEqual(bytesToHex(crypto.secretKeyToPublicKey(d)), D);
-      });
-      it('returns b for the main account (0, 0)', () => {
-        assert.strictEqual(crypto.subaddressSecretSpendKey(a, b, { major: 0, minor: 0 }), b);
-      });
-    });
+    describe('main address (0, 0)', () => {
+      const main = { major: 0, minor: 0 };
 
-    describe('subaddressPublicKeys', () => {
-      it('{ D, C = a*D } for account 1 index 1', () => {
-        const keys = crypto.subaddressPublicKeys(a, B, { major: 1, minor: 1 });
-        assert.strictEqual(bytesToHex(keys.publicSpendKey), D);
-        assert.strictEqual(bytesToHex(keys.publicViewKey), C);
+      it('has no subaddress secret', () => {
+        assert.throws(() => {
+          crypto.subaddressSecret(a, main);
+        });
       });
-      it('{ B, A = a*G } for the main account (0, 0)', () => {
-        const keys = crypto.subaddressPublicKeys(a, B, { major: 0, minor: 0 });
-        assert.deepStrictEqual(keys.publicSpendKey, B);
-        assert.deepStrictEqual(keys.publicViewKey, A);
-      });
-    });
 
-    describe('deriveSubaddressPublicKey', () => {
-      it('recovers the base spend key: (base + Hs*G) - Hs*G == base', () => {
-        const derivation = crypto.generateKeyDerivation(B, a);
-        const outputKey = crypto.derivePublicKey(derivation, 0, B);
-        assert.deepStrictEqual(crypto.deriveSubaddressPublicKey(outputKey, derivation, 0), B);
+      it('keeps the account keys', () => {
+        assert.deepStrictEqual(crypto.subaddressPublicSpendKey(a, B, main), B);
+        assert.strictEqual(crypto.subaddressSecretSpendKey(a, b, main), b);
+        assert.deepStrictEqual(crypto.subaddressPublicKeys(a, B, main), { publicSpendKey: B, publicViewKey: A });
       });
     });
+  });
 
-    describe('outputKeyImage', () => {
-      // reconstruct the one-time secret x independently (deriveSecretKey over the subaddress spend
-      // secret), then check outputKeyImage returns I = x * Hp(x*G)
-      it('main account (0, 0): key image of the one-time key derived over B', () => {
-        const derivation = crypto.generateKeyDerivation(B, a);
-        const secret = crypto.deriveSecretKey(derivation, 0, crypto.subaddressSecretSpendKey(a, b, { major: 0, minor: 0 }));
-        const oneTimeKey = crypto.derivePublicKey(derivation, 0, B);
-        assert.deepStrictEqual(crypto.secretKeyToPublicKey(secret), oneTimeKey);
-        assert.deepStrictEqual(crypto.outputKeyImage(a, b, derivation, 0, { major: 0, minor: 0 }), crypto.generateKeyImage(oneTimeKey, secret));
-      });
-      it('subaddress (1, 1): key image of the one-time key derived over D', () => {
-        const derivation = crypto.generateKeyDerivation(B, a);
-        const secret = crypto.deriveSecretKey(derivation, 0, crypto.subaddressSecretSpendKey(a, b, { major: 1, minor: 1 }));
-        const oneTimeKey = crypto.derivePublicKey(derivation, 0, hexToBytes(D));
-        assert.deepStrictEqual(crypto.secretKeyToPublicKey(secret), oneTimeKey);
-        assert.deepStrictEqual(crypto.outputKeyImage(a, b, derivation, 0, { major: 1, minor: 1 }), crypto.generateKeyImage(oneTimeKey, secret));
-      });
-    });
+  // The fixtures come from monero construct_tx, so every output key and vin key image is monero's.
+  describe('construct_tx outputs and inputs', () => {
+    for (const fixture of constructFixtures) {
+      describe(fixture.label, () => {
+        const tx = fixture.decode();
 
-    describe('outputKeyOffset', () => {
-      // x = keyOffset + b, so keyOffset*G + B (the base spend key) is the one-time output key
-      it('keyOffset*G + base spend key equals the one-time output key (main and subaddress)', () => {
-        const derivation = crypto.generateKeyDerivation(B, a);
-        for (const { index, spendPub } of [
-          { index: { major: 0, minor: 0 }, spendPub: B },
-          { index: { major: 1, minor: 1 }, spendPub: hexToBytes(D) },
-        ]) {
-          const offset = crypto.outputKeyOffset(a, derivation, 0, index);
-          const reconstructed = crypto.encodePoint(
-            crypto.decodePoint(crypto.secretKeyToPublicKey(offset)).add(crypto.decodePoint(B))
-          );
-          assert.deepStrictEqual(reconstructed, crypto.derivePublicKey(derivation, 0, spendPub));
-        }
+        it('deriveSubaddressPublicKey recovers the spend key of every recipient', () => {
+          for (const output of fixture.outputs) {
+            const derivation = ownerDerivation(fixture, output);
+            const outputKey = tx.prefix.vout[output.index].target.data.key;
+            const spendKey = crypto.deriveSubaddressPublicKey(outputKey, derivation, output.index);
+            assert.deepStrictEqual(spendKey, output.publicSpendKey);
+          }
+        });
+
+        it('outputKeyOffset gives the one-time secret of every input: (offset + b)*G = P', () => {
+          const a = helpers.decodeInt(fixture.sender.secretViewKey);
+          const b = helpers.decodeInt(fixture.sender.secretSpendKey);
+          for (const input of fixture.inputs) {
+            const derivation = crypto.generateKeyDerivation(input.prevTxPublicKey, a);
+            const offset = crypto.outputKeyOffset(a, derivation, input.prevOutputIndex, { major: 0, minor: 0 });
+            assert.strictEqual(offset, input.keyOffset);
+            assert.deepStrictEqual(crypto.secretKeyToPublicKey(crypto.Fn.add(offset, b)), input.publicKey);
+          }
+        });
+
+        it('outputKeyImage gives the key images of the vin', () => {
+          const a = helpers.decodeInt(fixture.sender.secretViewKey);
+          const b = helpers.decodeInt(fixture.sender.secretSpendKey);
+          const keyImages = fixture.inputs.map((input) => {
+            const derivation = crypto.generateKeyDerivation(input.prevTxPublicKey, a);
+            return bytesToHex(crypto.outputKeyImage(a, b, derivation, input.prevOutputIndex, { major: 0, minor: 0 }));
+          });
+          assert.deepStrictEqual(keyImages.sort(), tx.prefix.vin.map((vin) => bytesToHex(vin.data.keyImage)).sort());
+        });
       });
-    });
+    }
   });
 });

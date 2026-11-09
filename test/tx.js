@@ -1,4 +1,3 @@
-/* eslint-disable max-len */
 import assert from 'node:assert';
 import {
   afterEach, beforeEach, describe, it,
@@ -10,789 +9,351 @@ import {
 import * as bulletproofs from '../lib/bulletproofs.js';
 import * as clsag from '../lib/clsag.js';
 import * as crypto from '../lib/crypto.js';
-import * as cryptoData from '../lib/crypto-data.js';
 import * as helpers from '../lib/helpers.js';
 import * as raw from '../lib/raw.js';
 import * as ringct from '../lib/ringct.js';
 import * as tx from '../lib/tx.js';
+import { address } from '../lib/address.js';
 
-import { mockRandomBytes } from './mock-random.js';
-
-import constructFixtures from './fixtures/construct_txs.json' with { type: 'json' };
+import { constructFixtures } from './helpers/construct.js';
+import { mockRandomBytes } from './helpers/mock-random.js';
+import txExtraFixtures from './fixtures/tx_extra.json' with { type: 'json' };
 import txFixtures from './fixtures/txs.json' with { type: 'json' };
+import { FUNCTIONAL_TESTS_WALLET, KNACCC_WALLET } from './helpers/wallets.js';
+import { fixedKeys, withRandomSource } from './helpers/common.js';
+
+const scalar = helpers.decodeInt;
+const pointTimes = (point, s) => crypto.encodePoint(crypto.decodePoint(point).multiply(s));
+
+// A destination with the secret view scalar that finds its outputs.
+const recipientOf = (str, secretViewKey) => ({ ...address('mainnet').decode(str), secretView: scalar(secretViewKey) });
+const STANDARD = recipientOf(KNACCC_WALLET.address, KNACCC_WALLET.secretViewKey);
+const SUBADDRESS = recipientOf(KNACCC_WALLET.subaddresses[0].address, KNACCC_WALLET.secretViewKey);
+const OTHER_SUBADDRESS = recipientOf(KNACCC_WALLET.subaddresses[1].address, KNACCC_WALLET.secretViewKey);
+const OTHER_STANDARD = recipientOf(FUNCTIONAL_TESTS_WALLET.address, FUNCTIONAL_TESTS_WALLET.secretViewKey);
+
+// The spendable input of 5010000 and the sender of a monero construct_tx fixture.
+const SOURCE = constructFixtures[1];
+const {
+  inputs: INPUTS, secretSpendKey: SECRET_SPEND_KEY, secretViewKey: SECRET_VIEW_KEY,
+} = SOURCE.params();
+const SENDER = { ...SOURCE.outputs.find((output) => output.isChange), secretView: SECRET_VIEW_KEY };
+const changeOf = (amount) => ({
+  type: 'address',
+  publicSpendKey: SENDER.publicSpendKey,
+  publicViewKey: SENDER.publicViewKey,
+  secretView: SENDER.secretView,
+  isChange: true,
+  amount,
+});
+const paramsOf = (outputs, options = {}) => ({
+  inputs: INPUTS, outputs, secretSpendKey: SECRET_SPEND_KEY, secretViewKey: SECRET_VIEW_KEY, ...options,
+});
+
+// What the recipient of output i sees: whether the output key is its own, the view tag and the amount.
+function receivedBy(decoded, i, recipient) {
+  const { txPublicKeys, additionalTxPublicKeys } = tx.parseTxExtra(decoded.prefix.extra);
+  const { key, viewTag } = decoded.prefix.vout[i].target.data;
+  const derivation = [...txPublicKeys, additionalTxPublicKeys[i]].filter(Boolean)
+    .map((R) => crypto.generateKeyDerivation(R, recipient.secretView))
+    .find((candidate) => (
+      bytesToHex(crypto.derivePublicKey(candidate, i, recipient.publicSpendKey)) === bytesToHex(key)
+    ));
+  if (!derivation) {
+    return undefined;
+  }
+  const {
+    ecdhInfo, outPk, type,
+  } = decoded.rctSigBase;
+  return {
+    viewTag: crypto.deriveViewTag(derivation, i)[0] === viewTag,
+    amount: ringct.decodeRct(ecdhInfo[i], outPk[i], type, i, derivation).amount,
+  };
+}
+
+// test_tx_utils public key: tag 0x01 and 32 bytes.
+// https://github.com/monero-project/monero/blob/v0.18.5.1/tests/unit_tests/test_tx_utils.cpp#L100-L109
+const PUB_KEY = '1ed062a285405553705bbc59d31883279a16e4503fc68dad6ff4b70495ba8ce6';
+const PUB_KEY_FIELD = `01${PUB_KEY}`;
+const parsed = (txPublicKeys = [], additionalTxPublicKeys = [], encryptedPaymentId = undefined) => ({
+  txPublicKeys: txPublicKeys.map(hexToBytes),
+  additionalTxPublicKeys: additionalTxPublicKeys.map(hexToBytes),
+  encryptedPaymentId: encryptedPaymentId && hexToBytes(encryptedPaymentId),
+});
+const parse = (hex) => tx.parseTxExtra(hexToBytes(hex));
 
 describe('tx', () => {
-  // a tx secret key generator that returns the given keys in order
-  const fixedKeys = (keys) => {
-    const iterator = keys.values();
-    return () => iterator.next().value;
-  };
-
   describe('parseTxExtra', () => {
+    // https://github.com/monero-project/monero/blob/v0.18.5.1/tests/unit_tests/test_tx_utils.cpp#L45-L136
+    describe('monero test_tx_utils', () => {
+      it('empty extra', () => {
+        assert.deepStrictEqual(parse(''), parsed());
+      });
 
-    const NIL_TX_PUB_KEY = new Uint8Array(32);
-    const TX_EXTRA_PADDING_MAX_COUNT = 255;
-    const empty = {
-      txPublicKeys: [],
-      additionalTxPublicKeys: [],
-      encryptedPaymentId: undefined,
-    };
+      it('padding of 1, 2 and 255 bytes', () => {
+        for (const size of [1, 2, 255]) {
+          assert.deepStrictEqual(parse('00'.repeat(size)), parsed());
+        }
+      });
 
-    it('should handle empty extra', () => {
-      const result = tx.parseTxExtra(Uint8Array.from([]));
-      assert.deepStrictEqual(result, empty);
+      it('padding of 256 bytes, which monero rejects', () => {
+        assert.deepStrictEqual(parse('00'.repeat(256)), parsed());
+      });
+
+      it('padding with a non-zero byte, which monero rejects', () => {
+        assert.deepStrictEqual(parse('002a'), parsed());
+      });
+
+      it('public key only', () => {
+        assert.deepStrictEqual(parse(PUB_KEY_FIELD), parsed([PUB_KEY]));
+      });
+
+      it('nonce only, which is not a payment id', () => {
+        assert.deepStrictEqual(parse('02012a'), parsed());
+      });
+
+      it('public key and 76 bytes of padding', () => {
+        assert.deepStrictEqual(parse(`${PUB_KEY_FIELD}${'00'.repeat(76)}`), parsed([PUB_KEY]));
+      });
+
+      // https://github.com/monero-project/monero/blob/v0.18.5.1/tests/unit_tests/test_tx_utils.cpp#L156-L164
+      it('nonce with a size of 255 and only 18 bytes', () => {
+        assert.deepStrictEqual(parse(`02ff${'00'.repeat(18)}`), parsed());
+      });
+    });
+
+    // monero-oxide keeps the fields before a malformed field, as monero parse_tx_extra does.
+    // https://github.com/monero-oxide/monero-oxide/blob/0.1.0/monero-oxide/wallet/src/tests/extra.rs#L164-L219
+    describe('monero-oxide extra', () => {
+      it('public key and invalid padding keeps the public key', () => {
+        assert.deepStrictEqual(parse(`${PUB_KEY_FIELD}0001`), parsed([PUB_KEY]));
+      });
+
+      it('mysterious minergate fields', () => {
+        assert.deepStrictEqual(parse('de012a'), parsed());
+        assert.deepStrictEqual(parse(`de8004${'00'.repeat(512)}`), parsed());
+        assert.deepStrictEqual(parse(`deff${'00'.repeat(18)}`), parsed());
+        assert.deepStrictEqual(parse(`${PUB_KEY_FIELD}de012a`), parsed([PUB_KEY]));
+      });
+
+      it('empty nonce and arbitrary data nonce', () => {
+        assert.deepStrictEqual(parse('0200'), parsed());
+        assert.deepStrictEqual(parse('02017f'), parsed());
+      });
+    });
+
+    describe('monero fuzz seeds', () => {
+      for (const {
+        label, source, hex,
+      } of txExtraFixtures) {
+        it(label, () => {
+          const result = parse(hex);
+          assert.deepStrictEqual(result.txPublicKeys, [hexToBytes(hex.slice(2, 66))], source);
+          if (label.includes('payment id')) {
+            // 02 09 01: nonce tag, nonce size 9, encrypted payment id tag
+            assert.strictEqual(hex.slice(66, 72), '020901');
+            assert.deepStrictEqual(result.encryptedPaymentId, hexToBytes(hex.slice(72, 88)));
+          } else {
+            // 04 10: additional public keys tag, 16 keys
+            assert.strictEqual(hex.slice(66, 70), '0410');
+            assert.deepStrictEqual(result.additionalTxPublicKeys, (hex.slice(70).match(/.{64}/g)).map(hexToBytes));
+          }
+        });
+      }
+    });
+
+    it('keeps every tx public key, also an all-zero one', () => {
+      const zero = '00'.repeat(32);
+      assert.deepStrictEqual(parse(`${PUB_KEY_FIELD}01${zero}${PUB_KEY_FIELD}`), parsed([PUB_KEY, zero, PUB_KEY]));
+    });
+
+    it('reads the encrypted payment id before or after the public key', () => {
+      const nonce = '0209010102030405060708';
+      assert.deepStrictEqual(parse(`${PUB_KEY_FIELD}${nonce}`), parsed([PUB_KEY], [], '0102030405060708'));
+      assert.deepStrictEqual(parse(`${nonce}${PUB_KEY_FIELD}`), parsed([PUB_KEY], [], '0102030405060708'));
+    });
+
+    it('takes the first additional public keys field and the first payment id', () => {
+      const keys = ['11'.repeat(32), '22'.repeat(32)];
+      assert.deepStrictEqual(parse(`${PUB_KEY_FIELD}0401${keys[0]}0401${keys[1]}`), parsed([PUB_KEY], [keys[0]]));
+      assert.deepStrictEqual(parse(`${PUB_KEY_FIELD}0209010102030405060708020901${'ff'.repeat(8)}`), parsed([PUB_KEY], [], '0102030405060708'));
+    });
+
+    it('reads three additional public keys', () => {
+      const keys = ['fc1776e142ade7a4ad5e00bd27a480013f06c45d5ac80807d3609500bdd26cf2', '98705ffac66ef63d67cb5872b6fc222879902edbe7a3ccb83278c82a5fad097c', 'cfc1d89d5e5fba53a68a238239ebd5f60d60327d22da3ee95a9c070674ea525a'];
+      assert.deepStrictEqual(parse(`${PUB_KEY_FIELD}0403${keys.join('')}`), parsed([PUB_KEY], keys));
+    });
+
+    it('accepts a nonce of 255 bytes, the monero maximum', () => {
+      assert.deepStrictEqual(parse(`02ff01${'00'.repeat(255)}${PUB_KEY_FIELD}`), parsed([PUB_KEY]));
+    });
+
+    it('does not read a payment id from a nonce of the wrong size', () => {
+      assert.deepStrictEqual(parse('02052a0109080706'), parsed());
+    });
+
+    it('stops at an unknown tag and keeps the fields before it', () => {
+      assert.deepStrictEqual(parse(`${PUB_KEY_FIELD}9901${PUB_KEY_FIELD}`), parsed([PUB_KEY]));
+    });
+
+    it('does not emit truncated fields', () => {
+      assert.deepStrictEqual(parse('010203'), parsed());
+      assert.deepStrictEqual(parse('0401090909'), parsed());
     });
 
     // https://xmrchain.net/tx/f64bbe722d0ef4ae96d8b6dccf693ce8ca9b525e8c47fe9642040f744870d64b
-    it('should handle empty txPublicKey', () => {
-      const result = tx.parseTxExtra(hexToBytes('0321001a36d20bc8a84a04be188f3a0f8b76b9f4e66f000230e8d3f8ab72777a7520f100000083d9c85c1dccceb0ee3532ef7c9528ae4dfe2ca79b139f4637a3ba16de8d02110000000000000000000000000000000000'));
-      assert.deepStrictEqual(result, empty);
-    });
-
-    it('should handle padding only size 1', () => {
-      const result = tx.parseTxExtra(Uint8Array.from([0]));
-      assert.deepStrictEqual(result, empty);
-    });
-
-    it('should handle padding only size 2', () => {
-      const result = tx.parseTxExtra(Uint8Array.from([0, 0]));
-      assert.deepStrictEqual(result, empty);
-    });
-
-    it('should handle padding only max size', () => {
-      const result = tx.parseTxExtra(new Uint8Array(TX_EXTRA_PADDING_MAX_COUNT));
-      assert.deepStrictEqual(result, empty);
-    });
-
-    it('should handle padding only exceed max size', () => {
-      const result = tx.parseTxExtra(new Uint8Array(TX_EXTRA_PADDING_MAX_COUNT + 1));
-      assert.deepStrictEqual(result, empty);
-    });
-
-    it('should handle invalid padding only', () => {
-      const result = tx.parseTxExtra(Uint8Array.from([0, 42]));
-      assert.deepStrictEqual(result, empty);
-    });
-
-    it('should handle pub key only', () => {
-      const result = tx.parseTxExtra(Uint8Array.from([1, 30, 208, 98, 162, 133, 64, 85, 83, 112, 91, 188, 89, 211, 24, 131, 39, 154, 22, 228, 80, 63, 198, 141, 173, 111, 244, 183, 4, 149, 186, 140, 230]));
-      assert.deepStrictEqual(result, {
-        txPublicKeys: [hexToBytes('1ed062a285405553705bbc59d31883279a16e4503fc68dad6ff4b70495ba8ce6')],
-        additionalTxPublicKeys: [],
-        encryptedPaymentId: undefined,
-      });
-    });
-
-    it('should handle extra nonce only', () => {
-      const result = tx.parseTxExtra(Uint8Array.from([2, 1, 42]));
-      assert.deepStrictEqual(result, empty);
-    });
-
-    it('should handle pub key and padding', () => {
-      const result = tx.parseTxExtra(Uint8Array.from([1, 30, 208, 98, 162, 133, 64, 85, 83, 112, 91, 188, 89, 211, 24, 131, 39, 154, 22, 228,
-        80, 63, 198, 141, 173, 111, 244, 183, 4, 149, 186, 140, 230, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]));
-      assert.deepStrictEqual(result, {
-        txPublicKeys: [hexToBytes('1ed062a285405553705bbc59d31883279a16e4503fc68dad6ff4b70495ba8ce6')],
-        additionalTxPublicKeys: [],
-        encryptedPaymentId: undefined,
-      });
-    });
-
-    it('should handle two pub keys', () => {
-      const result = tx.parseTxExtra(Uint8Array.from([1, 30, 208, 98, 162, 133, 64, 85, 83, 112, 91, 188, 89, 211, 24, 131, 39, 154, 22, 228,
-        80, 63, 198, 141, 173, 111, 244, 183, 4, 149, 186, 140, 230,
-        1, 30, 208, 98, 162, 133, 64, 85, 83, 112, 91, 188, 89, 211, 24, 131, 39, 154, 22, 228,
-        80, 63, 198, 141, 173, 111, 244, 183, 4, 149, 186, 140, 230]));
-      assert.deepStrictEqual(result, {
-        txPublicKeys: [
-          hexToBytes('1ed062a285405553705bbc59d31883279a16e4503fc68dad6ff4b70495ba8ce6'),
-          hexToBytes('1ed062a285405553705bbc59d31883279a16e4503fc68dad6ff4b70495ba8ce6'),
-        ],
-        additionalTxPublicKeys: [],
-        encryptedPaymentId: undefined,
-      });
-    });
-
-    it('should keep an all-zero tx public key', () => {
-      const result = tx.parseTxExtra(Uint8Array.from([
-        1, ...new Uint8Array(32),
-        1, ...new Uint8Array(32).fill(1),
-      ]));
-      assert.deepStrictEqual(result, {
-        txPublicKeys: [NIL_TX_PUB_KEY, new Uint8Array(32).fill(1)],
-        additionalTxPublicKeys: [],
-        encryptedPaymentId: undefined,
-      });
-    });
-
-    it('should not read a payment id from a non-strict nonce', () => {
-      // a 0x01 byte inside a wrong-sized nonce must not be taken as an encrypted payment id
-      const result = tx.parseTxExtra(Uint8Array.from([2, 5, 42, 1, 9, 8, 7, 6]));
-      assert.deepStrictEqual(result, empty);
-    });
-
-    it('should not emit a truncated txPublicKey', () => {
-      const result = tx.parseTxExtra(Uint8Array.from([1, 2, 3]));
-      assert.deepStrictEqual(result, empty);
-    });
-
-    it('should not emit truncated additional pub keys', () => {
-      const result = tx.parseTxExtra(Uint8Array.from([4, 1, 9, 9, 9]));
-      assert.deepStrictEqual(result, empty);
-    });
-
-    it('should handle pub key with encrypted payment id', () => {
-      const result = tx.parseTxExtra(Uint8Array.from([1, 30, 208, 98, 162, 133, 64, 85, 83, 112, 91, 188, 89, 211, 24, 131, 39, 154, 22, 228,
-        80, 63, 198, 141, 173, 111, 244, 183, 4, 149, 186, 140, 230,
-        2, 9, 1, 0, 0, 0, 0, 0, 0, 0, 0]));
-      assert.deepStrictEqual(result, {
-        txPublicKeys: [hexToBytes('1ed062a285405553705bbc59d31883279a16e4503fc68dad6ff4b70495ba8ce6')],
-        encryptedPaymentId: hexToBytes('0000000000000000'),
-        additionalTxPublicKeys: [],
-      });
-    });
-
-    it('should handle pub key with encrypted payment id (reverse order)', () => {
-      const result = tx.parseTxExtra(Uint8Array.from([2, 9, 1, 0, 0, 0, 0, 0, 0, 0, 0,
-        1, 30, 208, 98, 162, 133, 64, 85, 83, 112, 91, 188, 89, 211, 24, 131, 39, 154, 22, 228,
-        80, 63, 198, 141, 173, 111, 244, 183, 4, 149, 186, 140, 230]));
-      assert.deepStrictEqual(result, {
-        txPublicKeys: [hexToBytes('1ed062a285405553705bbc59d31883279a16e4503fc68dad6ff4b70495ba8ce6')],
-        encryptedPaymentId: hexToBytes('0000000000000000'),
-        additionalTxPublicKeys: [],
-      });
-    });
-
-    it('should additional pub keys', () => {
-      const result = tx.parseTxExtra(Uint8Array.from([1, 59, 54, 37, 207, 182, 88, 66, 252, 62, 68, 82, 69, 144, 143, 155, 23, 27, 78, 24, 153, 84, 63, 183, 13, 133, 66, 79, 217, 177, 201, 94, 185,
-        4, 3, 252, 23, 118, 225, 66, 173, 231, 164, 173, 94, 0, 189, 39, 164, 128, 1, 63, 6, 196, 93, 90, 200, 8, 7, 211, 96, 149, 0, 189, 210, 108, 242, 152, 112, 95, 250, 198, 110, 246, 61, 103,
-        203, 88, 114, 182, 252, 34, 40, 121, 144, 46, 219, 231, 163, 204, 184, 50, 120, 200, 42, 95, 173, 9, 124, 207, 193, 216, 157, 94, 95, 186, 83, 166, 138, 35, 130, 57, 235, 213, 246, 13, 96,
-        50, 125, 34, 218, 62, 233, 90, 156, 7, 6, 116, 234, 82, 90]));
-      assert.deepStrictEqual(result, {
-        txPublicKeys: [hexToBytes('3b3625cfb65842fc3e445245908f9b171b4e1899543fb70d85424fd9b1c95eb9')],
-        additionalTxPublicKeys: [
-          hexToBytes('fc1776e142ade7a4ad5e00bd27a480013f06c45d5ac80807d3609500bdd26cf2'),
-          hexToBytes('98705ffac66ef63d67cb5872b6fc222879902edbe7a3ccb83278c82a5fad097c'),
-          hexToBytes('cfc1d89d5e5fba53a68a238239ebd5f60d60327d22da3ee95a9c070674ea525a'),
-        ],
-        encryptedPaymentId: undefined,
-      });
+    it('keeps nothing from a real extra that starts with a malformed field', () => {
+      assert.deepStrictEqual(parse('0321001a36d20bc8a84a04be188f3a0f8b76b9f4e66f000230e8d3f8ab72777a7520f100000083d9c85c1dccceb0ee3532ef7c9528ae4dfe2ca79b139f4637a3ba16de8d02110000000000000000000000000000000000'), parsed());
     });
   });
 
   describe('buildTxExtra', () => {
-    it('builds and round-trips through parseTxExtra', () => {
-      const txPublicKey = crypto.secretKeyToPublicKey(crypto.randomScalar());
-      const additionalTxPublicKeys = [crypto.secretKeyToPublicKey(crypto.randomScalar()), crypto.secretKeyToPublicKey(crypto.randomScalar())];
-      const encryptedPaymentId = randomBytes(8);
-      const parsed = tx.parseTxExtra(tx.buildTxExtra({
-        txPublicKey, additionalTxPublicKeys, encryptedPaymentId,
-      }));
-      assert.deepStrictEqual(parsed.txPublicKeys, [txPublicKey]);
-      assert.deepStrictEqual(parsed.additionalTxPublicKeys, additionalTxPublicKeys);
-      assert.deepStrictEqual(parsed.encryptedPaymentId, encryptedPaymentId);
+    it('writes the public key, the additional public keys and the payment id nonce in monero order', () => {
+      const keys = ['11'.repeat(32), '22'.repeat(32)];
+      assert.strictEqual(bytesToHex(tx.buildTxExtra({ txPublicKey: hexToBytes(PUB_KEY) })), PUB_KEY_FIELD);
+      assert.strictEqual(bytesToHex(tx.buildTxExtra({
+        txPublicKey: hexToBytes(PUB_KEY),
+        additionalTxPublicKeys: keys.map(hexToBytes),
+        encryptedPaymentId: hexToBytes('0102030405060708'),
+      })), `${PUB_KEY_FIELD}0402${keys.join('')}0209010102030405060708`);
     });
 
-    it('omits optional fields when not given', () => {
-      const txPublicKey = crypto.secretKeyToPublicKey(crypto.randomScalar());
-      const parsed = tx.parseTxExtra(tx.buildTxExtra({ txPublicKey }));
-      assert.deepStrictEqual(parsed.txPublicKeys, [txPublicKey]);
-      assert.deepStrictEqual(parsed.additionalTxPublicKeys, []);
-      assert.strictEqual(parsed.encryptedPaymentId, undefined);
-    });
+    // monero adds the payment id of an integrated address, or a zero dummy for at most two outputs.
+    // https://github.com/monero-project/monero/blob/v0.18.5.1/src/cryptonote_core/cryptonote_tx_utils.cpp#L265-L333
+    for (const fixture of constructFixtures) {
+      it(`builds the extra of ${fixture.label}`, () => {
+        const r = scalar(fixture.txKeys.txSecretKey);
+        const integrated = fixture.outputs.find((output) => output.type === 'integratedaddress');
+        let encryptedPaymentId;
+        if (integrated) {
+          encryptedPaymentId = tx.encryptPaymentId(integrated.paymentID, integrated.publicViewKey, r);
+        } else if (fixture.outputs.length <= 2) {
+          const recipient = fixture.outputs.find((output) => !output.isChange);
+          encryptedPaymentId = tx.encryptPaymentId(new Uint8Array(8), recipient.publicViewKey, r);
+        }
+        assert.deepStrictEqual(tx.buildTxExtra({
+          txPublicKey: fixture.txKeys.txPublicKey,
+          additionalTxPublicKeys: fixture.txKeys.additionalTxPublicKeys,
+          encryptedPaymentId,
+        }), fixture.decode().prefix.extra);
+      });
+    }
   });
 
   describe('encryptPaymentId', () => {
-    it('encrypts and decrypts symmetrically', () => {
-      const txSecretKey = crypto.randomScalar();
-      const secretViewKey = crypto.randomScalar();
-      const publicViewKey = crypto.secretKeyToPublicKey(secretViewKey);
-      const txPublicKey = crypto.secretKeyToPublicKey(txSecretKey);
-      const paymentId = randomBytes(8);
-      const encrypted = tx.encryptPaymentId(paymentId, publicViewKey, txSecretKey);
-      assert.notDeepStrictEqual(encrypted, paymentId);
-      // the recipient recovers it with the tx public key and its own view secret
-      assert.deepStrictEqual(tx.encryptPaymentId(encrypted, txPublicKey, secretViewKey), paymentId);
+    const isIntegrated = (output) => output.type === 'integratedaddress';
+    const fixture = constructFixtures.find(({ outputs }) => outputs.some(isIntegrated));
+    const integrated = fixture.outputs.find(isIntegrated);
+
+    it('encrypts the payment id of monero construct_tx with the tx secret key', () => {
+      const { encryptedPaymentId } = tx.parseTxExtra(fixture.decode().prefix.extra);
+      const r = scalar(fixture.txKeys.txSecretKey);
+      const encrypted = tx.encryptPaymentId(integrated.paymentID, integrated.publicViewKey, r);
+      assert.deepStrictEqual(encrypted, encryptedPaymentId);
+    });
+
+    it('decrypts it with the tx public key and the secret view key of the recipient', () => {
+      const { encryptedPaymentId } = tx.parseTxExtra(fixture.decode().prefix.extra);
+      const a = scalar(integrated.owner.secretViewKey);
+      const decrypted = tx.encryptPaymentId(encryptedPaymentId, fixture.txKeys.txPublicKey, a);
+      assert.deepStrictEqual(decrypted, integrated.paymentID);
     });
   });
 
   describe('generateOutputs', () => {
-    // a standard wallet: random view/spend secrets, public keys s*G
-    const stdWallet = () => {
-      const secretView = crypto.randomScalar();
-      const secretSpend = crypto.randomScalar();
-      return {
-        secretView,
-        publicSpendKey: crypto.secretKeyToPublicKey(secretSpend),
-        publicViewKey: crypto.secretKeyToPublicKey(secretView),
-        type: 'address',
-      };
-    };
-    // a subaddress wallet: spend key D is any point, view key C = a*D
-    const subWallet = () => {
-      const secretView = crypto.randomScalar();
-      const publicSpendKey = crypto.secretKeyToPublicKey(crypto.randomScalar());
-      return {
-        secretView,
-        publicSpendKey,
-        publicViewKey: crypto.encodePoint(crypto.decodePoint(publicSpendKey).multiplyUnsafe(secretView)),
-        type: 'subaddress',
-      };
-    };
-    // scan output i as its recipient would: try the tx pub key and each additional pub key
-    const recipientFinds = (out, i, w) => {
-      const { key, viewTag } = out.outputs[i];
-      return [out.txKeys.txPublicKey, ...out.txKeys.additionalTxPublicKeys].some((R) => {
-        const derivation = crypto.generateKeyDerivation(R, w.secretView);
-        return bytesToHex(crypto.derivePublicKey(derivation, i, w.publicSpendKey)) === bytesToHex(key)
-          && crypto.deriveViewTag(derivation, i)[0] === viewTag;
-      });
-    };
-
-    it('standard recipients: R = r*G, no additional keys', () => {
-      const a = stdWallet();
-      const b = stdWallet();
-      const out = tx.generateOutputs([a, b], fixedKeys([17n]));
-      assert.deepStrictEqual(out.txKeys.txPublicKey, crypto.secretKeyToPublicKey(17n));
-      assert.deepStrictEqual(out.txKeys.additionalTxPublicKeys, []);
-      assert.ok(recipientFinds(out, 0, a));
-      assert.ok(recipientFinds(out, 1, b));
-    });
-
-    it('standard + subaddress: R = r*G, one additional key per output', () => {
-      const a = stdWallet();
-      const s = subWallet();
-      const out = tx.generateOutputs([a, s], fixedKeys([17n, 19n, 23n]));
-      assert.deepStrictEqual(out.txKeys.txPublicKey, crypto.secretKeyToPublicKey(17n));
-      assert.deepStrictEqual(out.txKeys.additionalTxPublicKeys, [
-        crypto.secretKeyToPublicKey(19n),
-        crypto.encodePoint(crypto.decodePoint(s.publicSpendKey).multiplyUnsafe(23n)),
-      ]);
-      assert.ok(recipientFinds(out, 0, a));
-      assert.ok(recipientFinds(out, 1, s));
-    });
-
-    it('single subaddress: R = r*D, no additional keys', () => {
-      const s = subWallet();
-      const out = tx.generateOutputs([s], fixedKeys([17n]));
-      assert.deepStrictEqual(out.txKeys.txPublicKey, crypto.encodePoint(crypto.decodePoint(s.publicSpendKey).multiplyUnsafe(17n)));
-      assert.deepStrictEqual(out.txKeys.additionalTxPublicKeys, []);
-      assert.ok(recipientFinds(out, 0, s));
-    });
-
-    it('two distinct subaddresses: R = r*G, one additional key per output', () => {
-      const s1 = subWallet();
-      const s2 = subWallet();
-      const out = tx.generateOutputs([s1, s2], fixedKeys([17n, 19n, 23n]));
-      assert.deepStrictEqual(out.txKeys.txPublicKey, crypto.secretKeyToPublicKey(17n));
-      assert.deepStrictEqual(out.txKeys.additionalTxPublicKeys, [
-        crypto.encodePoint(crypto.decodePoint(s1.publicSpendKey).multiplyUnsafe(19n)),
-        crypto.encodePoint(crypto.decodePoint(s2.publicSpendKey).multiplyUnsafe(23n)),
-      ]);
-      assert.ok(recipientFinds(out, 0, s1));
-      assert.ok(recipientFinds(out, 1, s2));
-    });
-
-    it('duplicate subaddress is deduped: R = r*D, no additional keys', () => {
-      const s = subWallet();
-      const out = tx.generateOutputs([s, s], fixedKeys([17n]));
-      assert.deepStrictEqual(out.txKeys.txPublicKey, crypto.encodePoint(crypto.decodePoint(s.publicSpendKey).multiplyUnsafe(17n)));
-      assert.deepStrictEqual(out.txKeys.additionalTxPublicKeys, []);
-      assert.ok(recipientFinds(out, 0, s));
-      assert.ok(recipientFinds(out, 1, s));
-    });
-
-    it('change derives from a*R: single subaddress + change, R = r*D', () => {
-      const s = subWallet();
-      const sender = stdWallet();
-      const change = { ...sender, isChange: true };
-      const out = tx.generateOutputs([s, change], fixedKeys([17n]), sender.secretView);
-      assert.deepStrictEqual(out.txKeys.txPublicKey, crypto.encodePoint(crypto.decodePoint(s.publicSpendKey).multiplyUnsafe(17n)));
-      assert.deepStrictEqual(out.txKeys.additionalTxPublicKeys, []);
-      assert.ok(recipientFinds(out, 0, s));
-      assert.ok(recipientFinds(out, 1, sender));
-    });
-
-    it('change gets an additional key too: standard + subaddress + change', () => {
-      const a = stdWallet();
-      const s = subWallet();
-      const sender = stdWallet();
-      const change = { ...sender, isChange: true };
-      const out = tx.generateOutputs([a, s, change], fixedKeys([17n, 19n, 23n, 29n]), sender.secretView);
-      assert.deepStrictEqual(out.txKeys.txPublicKey, crypto.secretKeyToPublicKey(17n));
-      assert.deepStrictEqual(out.txKeys.additionalTxPublicKeys, [
-        crypto.secretKeyToPublicKey(19n),
-        crypto.encodePoint(crypto.decodePoint(s.publicSpendKey).multiplyUnsafe(23n)),
-        crypto.secretKeyToPublicKey(29n),
-      ]);
-      assert.ok(recipientFinds(out, 0, a));
-      assert.ok(recipientFinds(out, 1, s));
-      assert.ok(recipientFinds(out, 2, sender));
-    });
-  });
-
-  describe('createTransaction', () => {
-    // a fake owned output: view-only key offset, amount, mask, and a ring of decoys + the real one.
-    // secretSpendKey is 0 in these tests, so the one-time secret is keyOffset + 0 = keyOffset.
-    const makeInput = (amount, ringSize = 11) => {
-      const keyOffset = crypto.randomScalar();
-      const mask = crypto.randomScalar();
-      const commitment = ringct.pedersenCommitment(amount, mask);
-      const decoys = [];
-      for (let j = 0; j < ringSize - 1; j++) {
-        decoys.push({
-          publicKey: crypto.secretKeyToPublicKey(crypto.randomScalar()),
-          commitment: crypto.secretKeyToPublicKey(crypto.randomScalar()),
-          globalIndex: BigInt(1000 + j * 7),
-        });
-      }
-      return {
-        keyOffset,
-        publicKey: crypto.secretKeyToPublicKey(keyOffset),
-        amount,
-        mask,
-        commitment,
-        globalIndex: 9999n,
-        decoys,
-      };
-    };
-    // reconstruct the sorted ring createTransaction builds internally, as clsag ring members
-    const sortedRing = (input) => {
-      const real = {
-        publicKey: input.publicKey,
-        commitment: input.commitment,
-        globalIndex: input.globalIndex,
-      };
-      return [real, ...input.decoys]
-        .sort((a, b) => (a.globalIndex < b.globalIndex ? -1 : 1))
-        .map((m) => ({ publicKey: m.publicKey, commitment: m.commitment }));
-    };
-    const stdWallet = () => {
-      const secretView = crypto.randomScalar();
-      const secretSpend = crypto.randomScalar();
-      return {
-        secretView,
-        publicViewKey: crypto.secretKeyToPublicKey(secretView),
-        publicSpendKey: crypto.secretKeyToPublicKey(secretSpend),
-        type: 'address',
-      };
-    };
-    const sumPoints = (arr) => arr.reduce((acc, b) => acc.add(crypto.decodePoint(b)), crypto.Point.ZERO);
-
-    it('builds a valid 2-in 2-out transaction', () => {
-      const inputs = [makeInput(2000000n), makeInput(3000000n)];
-      const sender = stdWallet();
-      const recipient = stdWallet();
-      const fee = 10000n;
-      const outputs = [
-        { ...recipient, amount: 4000000n },
-        {
-          ...sender, isChange: true, amount: 990000n,
-        },
-      ];
-      const { bytes } = tx.createTransaction({
-        inputs, outputs, secretSpendKey: 0n, secretViewKey: sender.secretView, shuffleOutputs: false, // output 0 stays the recipient
-      });
-
-      // serialization round-trips
-      const decoded = raw.fullTransaction.decode(bytes);
-      assert.equal(bytesToHex(raw.fullTransaction.encode(decoded)), bytesToHex(bytes));
-      assert.equal(decoded.rctSigBase.type, 6);
-      assert.equal(decoded.prefix.vin.length, 2);
-      assert.equal(decoded.prefix.vout.length, 2);
-      // fee is the remainder sum(inputs) - sum(outputs)
-      assert.equal(decoded.rctSigBase.txnFee, fee);
-
-      const { outPk } = decoded.rctSigBase;
-      const {
-        bulletproofsPlus, CLSAGs, pseudoOuts,
-      } = decoded.rctSigPrunable;
-
-      // range proof verifies
-      assert.ok(bulletproofs.verifyBulletproofPlus(outPk, bulletproofsPlus[0]));
-
-      // commitments balance: sum(pseudoOuts) == sum(outPk) + fee*H
-      const lhs = sumPoints(pseudoOuts);
-      const rhs = sumPoints(outPk).add(cryptoData.H.multiplyUnsafe(fee));
-      assert.ok(lhs.equals(rhs));
-
-      // each CLSAG verifies against the original ring and the signed message
-      const message = tx.getPreMlsagHash(crypto.fastHash(raw.txPrefix.encode(decoded.prefix)), decoded.rctSigBase, bulletproofsPlus[0]);
-      const ringByKi = new Map();
-      for (const input of inputs) {
-        const ki = bytesToHex(crypto.generateKeyImage(input.publicKey, input.keyOffset));
-        ringByKi.set(ki, sortedRing(input));
-      }
-      decoded.prefix.vin.forEach((vin, i) => {
-        const pubs = ringByKi.get(bytesToHex(vin.data.keyImage));
-        assert.ok(pubs, 'key image not found among inputs');
-        const sig = {
-          s: CLSAGs[i].s, c1: CLSAGs[i].c1, I: vin.data.keyImage, D: CLSAGs[i].D,
-        };
-        assert.ok(clsag.verifyClsag(message, pubs, pseudoOuts[i], sig));
-      });
-
-      // the recipient (output 0) can decode the amount and the commitment matches
-      const [txPublicKey] = tx.parseTxExtra(decoded.prefix.extra).txPublicKeys;
-      const derivation = crypto.generateKeyDerivation(txPublicKey, recipient.secretView);
-      const ecdh = ringct.decodeRct(decoded.rctSigBase.ecdhInfo[0], outPk[0], 6, 0, derivation);
-      assert.equal(ecdh.amount, 4000000n);
-    });
-
-    it('rejects a wrong spend key: reconstructed key does not match the output', () => {
-      // makeInput's publicKey is keyOffset*G (b = 0); a non-zero spend key makes (keyOffset + b)*G != P
-      const inputs = [makeInput(5000000n)];
-      const outputs = [{ ...stdWallet(), amount: 4000000n }, { ...stdWallet(), amount: 990000n }];
-      assert.throws(() => tx.createTransaction({
-        inputs, outputs, secretSpendKey: crypto.randomScalar(),
-      }), /wrong spend key/);
-    });
-
-    it('rejects the same input twice and a duplicate ring member', () => {
-      const input = makeInput(5000000n);
-      const outputs = [{ ...stdWallet(), amount: 1000000n }, { ...stdWallet(), amount: 1000000n }];
-      assert.throws(() => tx.createTransaction({
-        inputs: [input, input], outputs, secretSpendKey: 0n,
-      }), /duplicate input/);
-      const decoys = [...input.decoys];
-      decoys[0] = { ...decoys[0], globalIndex: decoys[1].globalIndex };
-      assert.throws(() => tx.createTransaction({
-        inputs: [{ ...input, decoys }], outputs, secretSpendKey: 0n,
-      }), /duplicate ring member/);
-    });
-
-    it('returns the transaction or bytes alongside the used keys', () => {
-      const inputs = [makeInput(5010000n)];
-      const sender = stdWallet();
-      const outputs = [
-        { ...stdWallet(), amount: 4000000n },
-        {
-          ...sender, isChange: true, amount: 1000000n,
-        },
-      ];
-      const params = {
-        inputs, outputs, secretSpendKey: 0n, secretViewKey: sender.secretView,
-      };
-      const prepared = tx.prepareTransaction(params);
-      assert.deepStrictEqual(Object.keys(prepared).sort(), ['destinations', 'transaction', 'txKeys']);
-      assert.ok(prepared.transaction.prefix && prepared.transaction.rctSigBase && prepared.transaction.rctSigPrunable);
-      const created = tx.createTransaction(params);
-      assert.deepStrictEqual(Object.keys(created).sort(), ['bytes', 'destinations', 'txKeys']);
-      assert.ok(created.bytes instanceof Uint8Array);
-      for (const result of [prepared, created]) {
-        const decoded = result.transaction ?? raw.fullTransaction.decode(result.bytes);
-        assert.equal(decoded.prefix.vin.length, 1);
-        assert.equal(typeof result.txKeys.txSecretKey, 'bigint');
-        assert.deepStrictEqual(result.txKeys.additionalTxSecretKeys, []);
-        assert.deepStrictEqual(result.txKeys.additionalTxPublicKeys, []);
-        assert.deepStrictEqual(result.txKeys.txPublicKey, crypto.secretKeyToPublicKey(result.txKeys.txSecretKey));
-        assert.deepStrictEqual(tx.parseTxExtra(decoded.prefix.extra).txPublicKeys, [result.txKeys.txPublicKey]);
-        assert.deepStrictEqual(Object.keys(decoded).sort(), ['prefix', 'rctSigBase', 'rctSigPrunable']);
-      }
-    });
-
-    for (const type of ['address', 'subaddress']) {
-      it(`takes only the main key from the generator for a single ${type}`, () => {
-        const recipient = stdWallet();
-        recipient.type = type;
-        if (type === 'subaddress') {
-          recipient.publicViewKey = crypto.encodePoint(crypto.decodePoint(recipient.publicSpendKey).multiplyUnsafe(recipient.secretView));
-        }
-        const sender = stdWallet();
-        const txSecretKey = 17n;
-        const result = tx.prepareTransaction({
-          inputs: [makeInput(20n, 2)],
-          outputs: [{ ...recipient, amount: 10n }, {
-            ...sender, isChange: true, amount: 9n,
-          }],
-          secretSpendKey: 0n,
-          secretViewKey: sender.secretView,
-          generateTxSecretKey: fixedKeys([txSecretKey]),
-          shuffleOutputs: false,
-        });
-        assert.strictEqual(result.txKeys.txSecretKey, txSecretKey);
-        assert.deepStrictEqual(result.txKeys.additionalTxSecretKeys, []);
-        const extra = tx.parseTxExtra(result.transaction.prefix.extra);
-        const expected = type === 'subaddress'
-          ? crypto.encodePoint(crypto.decodePoint(recipient.publicSpendKey).multiplyUnsafe(txSecretKey))
-          : crypto.secretKeyToPublicKey(txSecretKey);
-        assert.deepStrictEqual(extra.txPublicKeys, [expected]);
-        assert.deepStrictEqual(extra.additionalTxPublicKeys, []);
-        assert.deepStrictEqual(result.txKeys.txPublicKey, expected);
-        assert.deepStrictEqual(result.txKeys.additionalTxPublicKeys, []);
-        [recipient, sender].forEach((owner, i) => {
-          const derivation = crypto.generateKeyDerivation(expected, owner.secretView);
-          assert.deepStrictEqual(crypto.derivePublicKey(derivation, i, owner.publicSpendKey), result.transaction.prefix.vout[i].target.data.key);
-          assert.equal(ringct.decodeRct(result.transaction.rctSigBase.ecdhInfo[i], result.transaction.rctSigBase.outPk[i], 6, i, derivation).amount, i === 0 ? 10n : 9n);
+    for (const fixture of constructFixtures) {
+      it(`derives the output keys and view tags of ${fixture.label}`, () => {
+        const { outputs, secretViewKey } = fixture.params();
+        const keys = [fixture.txKeys.txSecretKey, ...fixture.txKeys.additionalTxSecretKeys].map(scalar);
+        const generated = tx.generateOutputs(outputs, fixedKeys(keys), secretViewKey);
+        const { vout } = fixture.decode().prefix;
+        assert.deepStrictEqual(generated.txKeys.txPublicKey, fixture.txKeys.txPublicKey);
+        assert.deepStrictEqual(generated.txKeys.additionalTxPublicKeys, fixture.txKeys.additionalTxPublicKeys);
+        generated.outputs.forEach((output, i) => {
+          assert.deepStrictEqual(output.key, vout[i].target.data.key);
+          assert.strictEqual(output.viewTag, vout[i].target.data.viewTag);
         });
       });
     }
 
-    for (const supplied of [false, true]) {
-      for (const shuffleOutputs of [false, true]) {
-        it(`${supplied ? 'supplied' : 'generated'} keys match mixed outputs with shuffleOutputs=${shuffleOutputs}`, () => {
-          const first = stdWallet();
-          const sub = stdWallet();
-          sub.type = 'subaddress';
-          sub.publicViewKey = crypto.encodePoint(crypto.decodePoint(sub.publicSpendKey).multiplyUnsafe(sub.secretView));
-          const sender = stdWallet();
-          const input = makeInput(40n, 2);
-          const outputs = [
-            { ...first, amount: 10n },
-            { ...sub, amount: 20n },
-            {
-              ...sender, isChange: true, amount: 9n,
-            },
-          ];
-          // each call gets a fresh generator, so prepare and create draw the same keys
-          const params = () => ({
-            inputs: [input], outputs, secretSpendKey: 0n, secretViewKey: sender.secretView, shuffleOutputs,
-            generateTxSecretKey: supplied ? fixedKeys([17n, 19n, 23n, 29n]) : undefined,
-          });
-          let prepared;
-          let created;
-          let randomCalls = 0;
-          crypto.__mockRandomBytes__((length) => {
-            randomCalls++;
-            const bytes = new Uint8Array(length).fill(1);
-            if (length === 32) {
-              bytes[0] = randomCalls % 256;
-            }
-            return bytes;
-          });
-          try {
-            prepared = tx.prepareTransaction(params());
-            const prepareCalls = randomCalls;
-            randomCalls = 0;
-            created = tx.createTransaction(params());
-            assert.equal(randomCalls, prepareCalls);
-          } finally {
-            crypto.__mockRandomBytes__(randomBytes);
-          }
-          assert.deepStrictEqual(created.bytes, raw.fullTransaction.encode(prepared.transaction));
-          assert.deepStrictEqual(created.txKeys, prepared.txKeys);
-          if (supplied) {
-            assert.strictEqual(created.txKeys.txSecretKey, 17n);
-            assert.deepStrictEqual(created.txKeys.additionalTxSecretKeys, [19n, 23n, 29n]);
-          }
-          const decoded = raw.fullTransaction.decode(created.bytes);
-          const extra = tx.parseTxExtra(decoded.prefix.extra);
-          assert.deepStrictEqual(extra.txPublicKeys, [created.txKeys.txPublicKey]);
-          assert.deepStrictEqual(extra.additionalTxPublicKeys, created.txKeys.additionalTxPublicKeys);
-          assert.equal(typeof created.txKeys.txSecretKey, 'bigint');
-          assert.deepStrictEqual(extra.txPublicKeys, [crypto.secretKeyToPublicKey(created.txKeys.txSecretKey)]);
-          assert.equal(created.txKeys.additionalTxSecretKeys.length, 3);
-          const ordered = shuffleOutputs ? [outputs[0], outputs[2], outputs[1]] : outputs;
-          ordered.forEach((owner, i) => {
-            const secret = created.txKeys.additionalTxSecretKeys[i];
-            assert.equal(typeof secret, 'bigint');
-            const expected = owner.type === 'subaddress'
-              ? crypto.encodePoint(crypto.decodePoint(owner.publicSpendKey).multiplyUnsafe(secret))
-              : crypto.secretKeyToPublicKey(secret);
-            assert.deepStrictEqual(extra.additionalTxPublicKeys[i], expected);
-            const publicKey = owner.type === 'subaddress' ? expected : extra.txPublicKeys[0];
-            const derivation = crypto.generateKeyDerivation(publicKey, owner.secretView);
-            assert.deepStrictEqual(crypto.derivePublicKey(derivation, i, owner.publicSpendKey), decoded.prefix.vout[i].target.data.key);
-            assert.equal(crypto.deriveViewTag(derivation, i)[0], decoded.prefix.vout[i].target.data.viewTag);
-            assert.equal(ringct.decodeRct(decoded.rctSigBase.ecdhInfo[i], decoded.rctSigBase.outPk[i], 6, i, derivation).amount, owner.amount);
-          });
-          const {
-            bulletproofsPlus, CLSAGs, pseudoOuts,
-          } = decoded.rctSigPrunable;
-          assert.ok(bulletproofs.verifyBulletproofPlus(decoded.rctSigBase.outPk, bulletproofsPlus[0]));
-          const message = tx.getPreMlsagHash(crypto.fastHash(raw.txPrefix.encode(decoded.prefix)), decoded.rctSigBase, bulletproofsPlus[0]);
-          assert.ok(clsag.verifyClsag(message, sortedRing(input), pseudoOuts[0], { ...CLSAGs[0], I: decoded.prefix.vin[0].data.keyImage }));
+    // classify_addresses and the tx key rules of construct_tx_with_tx_key
+    // https://github.com/monero-project/monero/blob/v0.18.5.1/src/cryptonote_core/cryptonote_tx_utils.cpp#L87-L111
+    describe('tx public key rules', () => {
+      // whether recipient finds output i with its view tag
+      const finds = ({ txKeys, outputs }, i, recipient) => {
+        const candidates = [txKeys.txPublicKey, ...txKeys.additionalTxPublicKeys];
+        return candidates.some((R) => {
+          const derivation = crypto.generateKeyDerivation(R, recipient.secretView);
+          const outputKey = crypto.derivePublicKey(derivation, i, recipient.publicSpendKey);
+          return bytesToHex(outputKey) === bytesToHex(outputs[i].key)
+            && crypto.deriveViewTag(derivation, i)[0] === outputs[i].viewTag;
         });
-      }
-    }
-
-    it('returns the destinations in output order without changing the caller outputs', () => {
-      const sub = stdWallet();
-      sub.type = 'subaddress';
-      sub.publicViewKey = crypto.encodePoint(crypto.decodePoint(sub.publicSpendKey).multiplyUnsafe(sub.secretView));
-      const sender = stdWallet();
-      const outputs = [
-        { ...stdWallet(), amount: 10n },
-        { ...sub, amount: 20n },
-        {
-          ...sender, isChange: true, amount: 9n,
-        },
-      ];
-      const snapshot = structuredClone(outputs);
-      const params = {
-        inputs: [makeInput(40n, 2)], outputs, secretSpendKey: 0n, secretViewKey: sender.secretView,
       };
-      for (const result of [tx.prepareTransaction(params), tx.createTransaction(params)]) {
-        const { destinations, txKeys } = result;
-        const decoded = result.transaction ?? raw.fullTransaction.decode(result.bytes);
-        assert.deepStrictEqual(outputs.map((output) => destinations.indexOf(output)).sort(), [0, 1, 2]);
-        destinations.forEach((owner, i) => {
-          const publicKey = owner.type === 'subaddress' ? txKeys.additionalTxPublicKeys[i] : txKeys.txPublicKey;
-          const derivation = crypto.generateKeyDerivation(publicKey, owner.secretView);
-          assert.deepStrictEqual(crypto.derivePublicKey(derivation, i, owner.publicSpendKey), decoded.prefix.vout[i].target.data.key);
-          assert.equal(ringct.decodeRct(decoded.rctSigBase.ecdhInfo[i], decoded.rctSigBase.outPk[i], 6, i, derivation).amount, owner.amount);
-        });
-      }
-      const unshuffled = tx.prepareTransaction({ ...params, shuffleOutputs: false }).destinations;
-      assert.deepStrictEqual(unshuffled, outputs);
-      assert.notStrictEqual(unshuffled, outputs);
-      assert.deepStrictEqual(outputs, snapshot);
-    });
 
-    it('uses one additional key for every mixed output, including change or dummy', () => {
-      const sender = stdWallet();
-      const sub = stdWallet();
-      sub.type = 'subaddress';
-      sub.publicViewKey = crypto.encodePoint(crypto.decodePoint(sub.publicSpendKey).multiplyUnsafe(sub.secretView));
-      for (const amount of [0n, 5n]) {
-        const params = {
-          inputs: [makeInput(40n, 2)],
-          outputs: [{ ...stdWallet(), amount: 10n }, { ...sub, amount: 20n }, {
-            ...sender, isChange: true, amount,
-          }],
-          secretSpendKey: 0n,
-          secretViewKey: sender.secretView,
-        };
-        const result = tx.prepareTransaction({ ...params, generateTxSecretKey: fixedKeys([7n, 11n, 13n, 17n]) });
-        assert.equal(result.txKeys.txSecretKey, 7n);
-        assert.deepStrictEqual(result.txKeys.additionalTxSecretKeys, [11n, 13n, 17n]);
-        assert.equal(tx.parseTxExtra(result.transaction.prefix.extra).additionalTxPublicKeys.length, 3);
-      }
-    });
-
-    it('shuffles the outputs by default (shuffle_outs), keeps the caller order with shuffleOutputs: false', () => {
-      const inputs = [makeInput(5000000n, 2)];
-      const sender = stdWallet();
-      const first = stdWallet();
-      const second = stdWallet();
-      const outputs = [
-        { ...first, amount: 1000000n },
-        { ...second, amount: 2000000n },
-        {
-          ...sender, isChange: true, amount: 1000000n,
-        },
-      ];
-      // the wallet whose keys reproduce the one-time key at vout[index]
-      const ownerOf = (decoded, index) => [first, second, sender].find((w) => {
-        const [txPublicKey] = tx.parseTxExtra(decoded.prefix.extra).txPublicKeys;
-        const derivation = crypto.generateKeyDerivation(txPublicKey, w.secretView);
-        return bytesToHex(crypto.derivePublicKey(derivation, index, w.publicSpendKey)) === bytesToHex(decoded.prefix.vout[index].target.data.key);
+      it('standard recipients: R = r*G, no additional keys', () => {
+        const generated = tx.generateOutputs([STANDARD, OTHER_STANDARD], fixedKeys([17n]));
+        assert.deepStrictEqual(generated.txKeys.txPublicKey, crypto.secretKeyToPublicKey(17n));
+        assert.deepStrictEqual(generated.txKeys.additionalTxPublicKeys, []);
+        assert.ok(finds(generated, 0, STANDARD));
+        assert.ok(finds(generated, 1, OTHER_STANDARD));
       });
-      const build = (shuffleOutputs) => {
-        // constant random bytes make Fisher-Yates deterministic: j = 0x01010101 % (i + 1) is 1 for
-        // i = 2 and for i = 1, so [first, second, sender] becomes [first, sender, second]
-        crypto.__mockRandomBytes__((length) => new Uint8Array(length).fill(1));
-        try {
-          return raw.fullTransaction.decode(tx.createTransaction({
-            inputs, outputs, secretSpendKey: 0n, secretViewKey: sender.secretView, shuffleOutputs,
-          }).bytes);
-        } finally {
-          crypto.__mockRandomBytes__(randomBytes);
-        }
-      };
-      const shuffled = build(true);
-      assert.deepStrictEqual([0, 1, 2].map((i) => ownerOf(shuffled, i)), [first, sender, second]);
-      const ordered = build(false);
-      assert.deepStrictEqual([0, 1, 2].map((i) => ownerOf(ordered, i)), [first, second, sender]);
-    });
 
-    it('rejects empty inputs', () => {
-      assert.throws(() => tx.createTransaction({
-        inputs: [],
-        outputs: [{ ...stdWallet(), amount: 1n }],
-      }), /empty inputs/);
-    });
-
-    it('rejects invalid number of outputs', () => {
-      assert.throws(() => tx.createTransaction({
-        inputs: [makeInput(0n)],
-        outputs: [],
-      }), /at least two outputs/);
-      // monero requires at least two outputs; a single-output tx is rejected on-chain
-      assert.throws(() => tx.createTransaction({
-        inputs: [makeInput(0n)],
-        outputs: [{ ...stdWallet(), amount: 0n }],
-      }), /at least two outputs/);
-      assert.throws(() => tx.createTransaction({
-        inputs: [makeInput(0n)],
-        outputs: Array.from({ length: 17 }, () => ({ ...stdWallet(), amount: 0n })),
-      }), /too many outputs/);
-    });
-
-    it('rejects non-uint64 amounts, unlock time and offsets, and outputs exceeding inputs', () => {
-      const input = makeInput(10n);
-      const output = { ...stdWallet(), amount: 9n };
-      // a second (change) output so these reach the intended errors past the >=2 outputs guard
-      const change = {
-        ...stdWallet(), isChange: true, amount: 0n,
-      };
-      assert.throws(() => tx.createTransaction({ inputs: [{ ...input, amount: -1n }], outputs: [output, change] }), /uint64 bigint/);
-      assert.throws(() => tx.createTransaction({ inputs: [input], outputs: [{ ...output, amount: 2n ** 64n }, change] }), /uint64 bigint/);
-      assert.throws(() => tx.createTransaction({ inputs: [input], outputs: [{ ...output, amount: 100n }, change] }), /outputs exceed inputs/);
-      assert.throws(() => tx.createTransaction({
-        inputs: [input], outputs: [output, change], unlockTime: 2n ** 64n,
-      }), /uint64 bigint/);
-      input.decoys[0].globalIndex = -1n;
-      assert.throws(() => tx.createTransaction({ inputs: [input], outputs: [output, change] }), /uint64 bigint/);
-    });
-
-    it('allows an integrated address alongside other recipients; the id goes to the integrated one', () => {
-      const inputs = [makeInput(5010000n)];
-      const integrated = stdWallet();
-      const other = stdWallet();
-      const paymentId = randomBytes(8);
-      const outputs = [
-        {
-          ...integrated, type: 'integratedaddress', paymentID: paymentId, amount: 2000000n,
-        },
-        { ...other, amount: 3000000n },
-      ];
-      const { bytes } = tx.createTransaction({
-        inputs, outputs, secretSpendKey: 0n,
+      it('standard and subaddress: R = r*G, one additional key per output', () => {
+        const generated = tx.generateOutputs([STANDARD, SUBADDRESS], fixedKeys([17n, 19n, 23n]));
+        assert.deepStrictEqual(generated.txKeys.txPublicKey, crypto.secretKeyToPublicKey(17n));
+        assert.deepStrictEqual(generated.txKeys.additionalTxPublicKeys, [
+          crypto.secretKeyToPublicKey(19n),
+          pointTimes(SUBADDRESS.publicSpendKey, 23n),
+        ]);
+        assert.ok(finds(generated, 0, STANDARD));
+        assert.ok(finds(generated, 1, SUBADDRESS));
       });
-      const { encryptedPaymentId, txPublicKeys: [txPublicKey] } = tx.parseTxExtra(raw.fullTransaction.decode(bytes).prefix.extra);
-      assert.equal(encryptedPaymentId.length, 8);
-      // the integrated recipient recovers its id; the other recipient is unaffected
-      assert.deepStrictEqual(tx.encryptPaymentId(encryptedPaymentId, txPublicKey, integrated.secretView), paymentId);
-    });
 
-    it('rejects more than one address with a payment id', () => {
-      const inputs = [makeInput(5010000n)];
-      const outputs = [
-        {
-          ...stdWallet(), type: 'integratedaddress', paymentID: randomBytes(8), amount: 2000000n,
-        },
-        {
-          ...stdWallet(), type: 'integratedaddress', paymentID: randomBytes(8), amount: 3000000n,
-        },
-      ];
-      assert.throws(() => tx.createTransaction({ inputs, outputs }), /multiple addresses with payment ids/);
-    });
-
-    it('encrypts the integrated payment id with the supplied main key', () => {
-      const inputs = [makeInput(5010000n)];
-      const recipient = stdWallet();
-      const sender = stdWallet();
-      const paymentId = randomBytes(8);
-      const outputs = [
-        {
-          ...recipient, type: 'integratedaddress', paymentID: paymentId, amount: 4000000n,
-        },
-        {
-          ...sender, isChange: true, amount: 1000000n,
-        },
-      ];
-      const { bytes, txKeys } = tx.createTransaction({
-        inputs, outputs, secretSpendKey: 0n, secretViewKey: sender.secretView, generateTxSecretKey: fixedKeys([17n]),
+      it('single subaddress: R = r*D, no additional keys', () => {
+        const generated = tx.generateOutputs([SUBADDRESS], fixedKeys([17n]));
+        assert.deepStrictEqual(generated.txKeys.txPublicKey, pointTimes(SUBADDRESS.publicSpendKey, 17n));
+        assert.deepStrictEqual(generated.txKeys.additionalTxPublicKeys, []);
+        assert.ok(finds(generated, 0, SUBADDRESS));
       });
-      const { encryptedPaymentId, txPublicKeys: [txPublicKey] } = tx.parseTxExtra(raw.fullTransaction.decode(bytes).prefix.extra);
-      assert.equal(txKeys.txSecretKey, 17n);
-      assert.deepStrictEqual(txPublicKey, crypto.secretKeyToPublicKey(17n));
-      assert.equal(encryptedPaymentId.length, 8);
-      // the recipient recovers it with the tx pub key and its own view secret
-      assert.deepStrictEqual(tx.encryptPaymentId(encryptedPaymentId, txPublicKey, recipient.secretView), paymentId);
+
+      it('two different subaddresses: R = r*G, one additional key per output', () => {
+        const generated = tx.generateOutputs([SUBADDRESS, OTHER_SUBADDRESS], fixedKeys([17n, 19n, 23n]));
+        assert.deepStrictEqual(generated.txKeys.txPublicKey, crypto.secretKeyToPublicKey(17n));
+        assert.deepStrictEqual(generated.txKeys.additionalTxPublicKeys, [
+          pointTimes(SUBADDRESS.publicSpendKey, 19n),
+          pointTimes(OTHER_SUBADDRESS.publicSpendKey, 23n),
+        ]);
+        assert.ok(finds(generated, 0, SUBADDRESS));
+        assert.ok(finds(generated, 1, OTHER_SUBADDRESS));
+      });
+
+      it('the same subaddress twice counts once: R = r*D, no additional keys', () => {
+        const generated = tx.generateOutputs([SUBADDRESS, SUBADDRESS], fixedKeys([17n]));
+        assert.deepStrictEqual(generated.txKeys.txPublicKey, pointTimes(SUBADDRESS.publicSpendKey, 17n));
+        assert.deepStrictEqual(generated.txKeys.additionalTxPublicKeys, []);
+        assert.ok(finds(generated, 0, SUBADDRESS));
+        assert.ok(finds(generated, 1, SUBADDRESS));
+      });
+
+      it('change of a single subaddress send derives from a*R with R = r*D', () => {
+        const generated = tx.generateOutputs([SUBADDRESS, changeOf(1n)], fixedKeys([17n]), SENDER.secretView);
+        assert.deepStrictEqual(generated.txKeys.txPublicKey, pointTimes(SUBADDRESS.publicSpendKey, 17n));
+        assert.deepStrictEqual(generated.txKeys.additionalTxPublicKeys, []);
+        assert.ok(finds(generated, 0, SUBADDRESS));
+        assert.ok(finds(generated, 1, SENDER));
+      });
+
+      it('change gets an additional key next to standard and subaddress recipients', () => {
+        const destinations = [STANDARD, SUBADDRESS, changeOf(1n)];
+        const generated = tx.generateOutputs(destinations, fixedKeys([17n, 19n, 23n, 29n]), SENDER.secretView);
+        assert.deepStrictEqual(generated.txKeys.txPublicKey, crypto.secretKeyToPublicKey(17n));
+        assert.deepStrictEqual(generated.txKeys.additionalTxPublicKeys, [
+          crypto.secretKeyToPublicKey(19n),
+          pointTimes(SUBADDRESS.publicSpendKey, 23n),
+          crypto.secretKeyToPublicKey(29n),
+        ]);
+        [STANDARD, SUBADDRESS, SENDER].forEach((recipient, i) => assert.ok(finds(generated, i, recipient)));
+      });
     });
   });
 
@@ -802,51 +363,263 @@ describe('tx', () => {
   // same bytes. The stream only lines up when the transaction keys are replayed the way monero
   // produced them, which generatedTxKeys records.
   describe('createTransaction against monero', () => {
-    const scalar = (hex) => helpers.decodeInt(hexToBytes(hex));
-
     beforeEach(mockRandomBytes);
     afterEach(() => crypto.__mockRandomBytes__(randomBytes));
 
     for (const fixture of constructFixtures) {
       it(fixture.label, () => {
-        const { construct } = fixture;
         const { bytes } = tx.createTransaction({
-          inputs: construct.inputs.map((input) => ({
-            keyOffset: scalar(input.keyOffset),
-            publicKey: hexToBytes(input.publicKey),
-            amount: BigInt(input.amount),
-            mask: scalar(input.mask),
-            commitment: hexToBytes(input.commitment),
-            globalIndex: BigInt(input.globalIndex),
-            decoys: input.decoys.map((decoy) => ({
-              publicKey: hexToBytes(decoy.publicKey),
-              commitment: hexToBytes(decoy.commitment),
-              globalIndex: BigInt(decoy.globalIndex),
-            })),
-          })),
-          outputs: construct.outputs.map((output) => ({
-            type: output.type,
-            publicSpendKey: hexToBytes(output.publicSpendKey),
-            publicViewKey: hexToBytes(output.publicViewKey),
-            amount: BigInt(output.amount),
-            ...(output.isChange ? { isChange: true } : {}),
-            ...(output.paymentID ? { paymentID: hexToBytes(output.paymentID) } : {}),
-          })),
-          secretSpendKey: scalar(construct.secretSpendKey),
-          secretViewKey: scalar(construct.secretViewKey),
-          unlockTime: BigInt(construct.unlockTime),
-          shuffleOutputs: construct.shuffleOutputs,
-          generateTxSecretKey: construct.generatedTxKeys
+          ...fixture.params(),
+          generateTxSecretKey: fixture.generatedTxKeys
             ? undefined
-            : fixedKeys([construct.txKeys.txSecretKey, ...construct.txKeys.additionalTxSecretKeys].map(scalar)),
+            : fixedKeys([fixture.txKeys.txSecretKey, ...fixture.txKeys.additionalTxSecretKeys].map(scalar)),
         });
-
         assert.strictEqual(bytesToHex(bytes), fixture.hex);
       });
     }
   });
 
+  describe('createTransaction', () => {
+    const MIXED = () => [{ ...STANDARD, amount: 1000000n }, { ...SUBADDRESS, amount: 2000000n }, changeOf(2000000n)];
+    // constant random bytes give a known shuffle, [address, change, subaddress]; the fixed keys stay distinct
+    const shuffled = () => withRandomSource((length) => new Uint8Array(length).fill(1), () => (
+      tx.prepareTransaction(paramsOf(MIXED(), { generateTxSecretKey: fixedKeys([17n, 19n, 23n, 29n]) }))
+    ));
+
+    it('prepareTransaction and createTransaction build the same transaction from the same random stream', () => {
+      let prepared;
+      let created;
+      try {
+        mockRandomBytes();
+        prepared = tx.prepareTransaction(paramsOf(MIXED()));
+        mockRandomBytes();
+        created = tx.createTransaction(paramsOf(MIXED()));
+      } finally {
+        crypto.__mockRandomBytes__(randomBytes);
+      }
+      assert.deepStrictEqual(Object.keys(prepared).sort(), ['destinations', 'transaction', 'txKeys']);
+      assert.deepStrictEqual(Object.keys(created).sort(), ['bytes', 'destinations', 'txKeys']);
+      assert.deepStrictEqual(created.bytes, raw.fullTransaction.encode(prepared.transaction));
+      assert.deepStrictEqual(created.txKeys, prepared.txKeys);
+      assert.deepStrictEqual(created.destinations, prepared.destinations);
+    });
+
+    it('returns the generated tx secret key, whose public key is in extra', () => {
+      const { bytes, txKeys } = tx.createTransaction(paramsOf([{ ...STANDARD, amount: 1000000n }, changeOf(4000000n)]));
+      assert.strictEqual(typeof txKeys.txSecretKey, 'bigint');
+      assert.deepStrictEqual(txKeys.txPublicKey, crypto.secretKeyToPublicKey(txKeys.txSecretKey));
+      const { extra } = raw.fullTransaction.decode(bytes).prefix;
+      assert.deepStrictEqual(tx.parseTxExtra(extra).txPublicKeys, [txKeys.txPublicKey]);
+      assert.deepStrictEqual(txKeys.additionalTxSecretKeys, []);
+      assert.deepStrictEqual(txKeys.additionalTxPublicKeys, []);
+    });
+
+    it('uses the supplied tx secret keys in order, one additional key per output', () => {
+      const { transaction, txKeys } = tx.prepareTransaction(paramsOf(MIXED(), {
+        generateTxSecretKey: fixedKeys([17n, 19n, 23n, 29n]),
+        shuffleOutputs: false,
+      }));
+      assert.strictEqual(txKeys.txSecretKey, 17n);
+      assert.deepStrictEqual(txKeys.additionalTxSecretKeys, [19n, 23n, 29n]);
+      const extra = tx.parseTxExtra(transaction.prefix.extra);
+      assert.deepStrictEqual(extra.txPublicKeys, [crypto.secretKeyToPublicKey(17n)]);
+      assert.deepStrictEqual(extra.additionalTxPublicKeys, [
+        crypto.secretKeyToPublicKey(19n),
+        pointTimes(SUBADDRESS.publicSpendKey, 23n),
+        crypto.secretKeyToPublicKey(29n),
+      ]);
+      assert.deepStrictEqual(txKeys.additionalTxPublicKeys, extra.additionalTxPublicKeys);
+      [STANDARD, SUBADDRESS, SENDER].forEach((recipient, i) => {
+        assert.deepStrictEqual(receivedBy(transaction, i, recipient), { viewTag: true, amount: MIXED()[i].amount });
+      });
+    });
+
+    for (const recipient of [STANDARD, SUBADDRESS]) {
+      it(`takes only the main key from the generator for a single ${recipient.type}`, () => {
+        const outputs = [{ ...recipient, amount: 1000000n }, changeOf(4000000n)];
+        const { transaction, txKeys } = tx.prepareTransaction(paramsOf(outputs, {
+          generateTxSecretKey: fixedKeys([17n]),
+          shuffleOutputs: false,
+        }));
+        const R = recipient.type === 'subaddress'
+          ? pointTimes(recipient.publicSpendKey, 17n)
+          : crypto.secretKeyToPublicKey(17n);
+        assert.strictEqual(txKeys.txSecretKey, 17n);
+        assert.deepStrictEqual(txKeys.additionalTxSecretKeys, []);
+        const extra = tx.parseTxExtra(transaction.prefix.extra);
+        assert.deepStrictEqual(extra.txPublicKeys, [R]);
+        assert.deepStrictEqual(extra.additionalTxPublicKeys, []);
+        assert.deepStrictEqual(receivedBy(transaction, 0, recipient), { viewTag: true, amount: 1000000n });
+        assert.deepStrictEqual(receivedBy(transaction, 1, SENDER), { viewTag: true, amount: 4000000n });
+      });
+    }
+
+    it('uses one additional key for every mixed output, also for a zero change', () => {
+      for (const amount of [0n, 5n]) {
+        const outputs = [{ ...STANDARD, amount: 10n }, { ...SUBADDRESS, amount: 20n }, changeOf(amount)];
+        const generateTxSecretKey = fixedKeys([7n, 11n, 13n, 17n]);
+        const { transaction, txKeys } = tx.prepareTransaction(paramsOf(outputs, { generateTxSecretKey }));
+        assert.strictEqual(txKeys.txSecretKey, 7n);
+        assert.deepStrictEqual(txKeys.additionalTxSecretKeys, [11n, 13n, 17n]);
+        assert.strictEqual(tx.parseTxExtra(transaction.prefix.extra).additionalTxPublicKeys.length, 3);
+      }
+    });
+
+    // wallet2 shuffle_outs: Fisher-Yates over the outputs with the CSPRNG
+    it('shuffles the outputs by default and keeps the caller order without shuffleOutputs', () => {
+      const outputs = [{ ...STANDARD, amount: 1000000n }, { ...OTHER_STANDARD, amount: 2000000n }, changeOf(1000000n)];
+      const ownersOf = (decoded) => decoded.prefix.vout.map((vout, i) => (
+        [STANDARD, OTHER_STANDARD, SENDER].find((recipient) => receivedBy(decoded, i, recipient))
+      ));
+      // constant random bytes make Fisher-Yates deterministic: j = 0x01010101 % (i + 1) is 1 for
+      // i = 2 and for i = 1, so [standard, other, change] becomes [standard, change, other]
+      const build = (shuffleOutputs) => withRandomSource((length) => new Uint8Array(length).fill(1), () => (
+        tx.prepareTransaction(paramsOf(outputs, { shuffleOutputs })).transaction
+      ));
+      assert.deepStrictEqual(ownersOf(build(true)), [STANDARD, SENDER, OTHER_STANDARD]);
+      assert.deepStrictEqual(ownersOf(build(false)), [STANDARD, OTHER_STANDARD, SENDER]);
+    });
+
+    it('moves the additional keys with the shuffled outputs', () => {
+      const {
+        transaction, txKeys, destinations,
+      } = shuffled();
+      const kinds = destinations.map(({ type, isChange }) => (isChange ? 'change' : type));
+      assert.deepStrictEqual(kinds, ['address', 'change', 'subaddress']);
+      destinations.forEach((destination, i) => {
+        const s = txKeys.additionalTxSecretKeys[i];
+        const expected = destination.type === 'subaddress'
+          ? pointTimes(destination.publicSpendKey, s)
+          : crypto.secretKeyToPublicKey(s);
+        assert.deepStrictEqual(txKeys.additionalTxPublicKeys[i], expected);
+        assert.deepStrictEqual(receivedBy(transaction, i, destination), { viewTag: true, amount: destination.amount });
+      });
+    });
+
+    it('signs a shuffled transaction: Bulletproof+ and every CLSAG verify', () => {
+      const {
+        prefix, rctSigBase, rctSigPrunable,
+      } = shuffled().transaction;
+      const [proof] = rctSigPrunable.bulletproofsPlus;
+      assert.ok(bulletproofs.verifyBulletproofPlus(rctSigBase.outPk, proof));
+      const message = tx.getPreMlsagHash(crypto.fastHash(raw.txPrefix.encode(prefix)), rctSigBase, proof);
+      prefix.vin.forEach((vin, i) => {
+        const signature = { ...rctSigPrunable.CLSAGs[i], I: vin.data.keyImage };
+        assert.ok(clsag.verifyClsag(message, SOURCE.ringOf(vin), rctSigPrunable.pseudoOuts[i], signature));
+      });
+    });
+
+    it('returns the destinations in output order without changing the caller outputs', () => {
+      const outputs = MIXED();
+      const snapshot = structuredClone(outputs);
+      for (const result of [tx.prepareTransaction(paramsOf(outputs)), tx.createTransaction(paramsOf(outputs))]) {
+        const decoded = result.transaction ?? raw.fullTransaction.decode(result.bytes);
+        assert.deepStrictEqual(outputs.map((output) => result.destinations.indexOf(output)).sort(), [0, 1, 2]);
+        result.destinations.forEach((destination, i) => {
+          assert.deepStrictEqual(receivedBy(decoded, i, destination), { viewTag: true, amount: destination.amount });
+        });
+      }
+      const unshuffled = tx.prepareTransaction(paramsOf(outputs, { shuffleOutputs: false })).destinations;
+      assert.deepStrictEqual(unshuffled, outputs);
+      assert.notStrictEqual(unshuffled, outputs);
+      assert.deepStrictEqual(outputs, snapshot);
+    });
+
+    it('encrypts the payment id of an integrated address to its view key, next to another recipient', () => {
+      const paymentID = hexToBytes('0123456789abcdef');
+      const outputs = [{
+        ...STANDARD, type: 'integratedaddress', paymentID, amount: 2000000n,
+      }, { ...OTHER_STANDARD, amount: 3000000n }];
+      const { transaction } = tx.prepareTransaction(paramsOf(outputs, { generateTxSecretKey: fixedKeys([17n]) }));
+      const { encryptedPaymentId, txPublicKeys } = tx.parseTxExtra(transaction.prefix.extra);
+      assert.deepStrictEqual(txPublicKeys, [crypto.secretKeyToPublicKey(17n)]);
+      assert.deepStrictEqual(tx.encryptPaymentId(encryptedPaymentId, txPublicKeys[0], STANDARD.secretView), paymentID);
+    });
+
+    describe('rejects', () => {
+      const TWO_OUTPUTS = () => [{ ...STANDARD, amount: 1000000n }, changeOf(4000000n)];
+
+      it('a spend key that does not own the input', () => {
+        assert.throws(() => {
+          tx.createTransaction(paramsOf(TWO_OUTPUTS(), { secretSpendKey: SECRET_SPEND_KEY + 1n }));
+        }, /wrong spend key/);
+      });
+
+      it('the same input twice and a duplicate ring member', () => {
+        const [input] = INPUTS;
+        assert.throws(() => {
+          tx.createTransaction(paramsOf(TWO_OUTPUTS(), { inputs: [input, input] }));
+        }, /duplicate input/);
+        const { globalIndex } = input.decoys[1];
+        const decoys = input.decoys.map((decoy, i) => (i === 0 ? { ...decoy, globalIndex } : decoy));
+        assert.throws(() => {
+          tx.createTransaction(paramsOf(TWO_OUTPUTS(), { inputs: [{ ...input, decoys }] }));
+        }, /duplicate ring member/);
+      });
+
+      it('no inputs', () => {
+        assert.throws(() => {
+          tx.createTransaction(paramsOf(TWO_OUTPUTS(), { inputs: [] }));
+        }, /empty inputs/);
+      });
+
+      // monero requires at least two outputs and at most 16
+      it('fewer than two and more than 16 outputs', () => {
+        assert.throws(() => {
+          tx.createTransaction(paramsOf([]));
+        }, /at least two outputs/);
+        assert.throws(() => {
+          tx.createTransaction(paramsOf([{ ...STANDARD, amount: 0n }]));
+        }, /at least two outputs/);
+        assert.throws(() => {
+          tx.createTransaction(paramsOf(Array.from({ length: 17 }, () => ({ ...STANDARD, amount: 0n }))));
+        }, /too many outputs/);
+      });
+
+      it('amounts, unlock time and global indexes outside uint64, and outputs that exceed the inputs', () => {
+        const [input] = INPUTS;
+        assert.throws(() => {
+          tx.createTransaction(paramsOf(TWO_OUTPUTS(), { inputs: [{ ...input, amount: -1n }] }));
+        }, /uint64 bigint/);
+        assert.throws(() => {
+          tx.createTransaction(paramsOf([{ ...STANDARD, amount: 2n ** 64n }, changeOf(0n)]));
+        }, /uint64 bigint/);
+        assert.throws(() => {
+          tx.createTransaction(paramsOf(TWO_OUTPUTS(), { unlockTime: 2n ** 64n }));
+        }, /uint64 bigint/);
+        const decoys = input.decoys.map((decoy, i) => (i === 0 ? { ...decoy, globalIndex: -1n } : decoy));
+        assert.throws(() => {
+          tx.createTransaction(paramsOf(TWO_OUTPUTS(), { inputs: [{ ...input, decoys }] }));
+        }, /uint64 bigint/);
+        assert.throws(() => {
+          tx.createTransaction(paramsOf([{ ...STANDARD, amount: 5010001n }, changeOf(0n)]));
+        }, /outputs exceed inputs/);
+      });
+
+      it('more than one address with a payment id', () => {
+        const outputs = [STANDARD, OTHER_STANDARD].map((recipient) => ({
+          ...recipient, type: 'integratedaddress', paymentID: new Uint8Array(8), amount: 1000000n,
+        }));
+        assert.throws(() => {
+          tx.createTransaction(paramsOf(outputs));
+        }, /multiple addresses with payment ids/);
+      });
+    });
+  });
+
   describe('globalIndexesFromOutputOffsets', () => {
+    it('gives the ring global indexes of monero construct_tx', () => {
+      const ringKey = (indexes) => indexes.join(',');
+      const sorted = (indexes) => indexes.sort((a, b) => (a < b ? -1 : 1));
+      const globalIndexesOf = (input) => [input, ...input.decoys].map((member) => member.globalIndex);
+      for (const fixture of constructFixtures) {
+        const expected = fixture.inputs.map((input) => sorted(globalIndexesOf(input)));
+        const { vin } = fixture.decode().prefix;
+        const actual = vin.map(({ data }) => tx.globalIndexesFromOutputOffsets(data.outputOffsets));
+        assert.deepStrictEqual(actual.map(ringKey).sort(), expected.map(ringKey).sort(), fixture.label);
+      }
+    });
+
     it('reconstructs absolute indexes with uint64 wraparound (unsorted ring)', () => {
       const mask = (1n << 64n) - 1n;
       // a "negative" relative delta stored as 2^64 - 30 lowers the next index by 30
@@ -855,220 +628,67 @@ describe('tx', () => {
   });
 
   describe('getPreMlsagHash', () => {
-    // https://github.com/monero-oxide/monero-oxide/blob/946ec5f00ff071b129758ee8cba5528539fccfe4/monero-oxide/src/tests/vectors/transactions.json#L99-L101
-    // type 6 marker: #L150-L151
-    it('matches monero-oxide type 6 tx', () => {
-      txFixtures.filter((fixture) => fixture.signatureHash).forEach((fixture) => {
+    // https://github.com/monero-oxide/monero-oxide/blob/0.1.0/monero-oxide/src/tests/vectors/transactions.json#L99-L101
+    it('matches the signature hash of the monero-oxide type 6 vector', () => {
+      for (const fixture of txFixtures.filter(({ signatureHash }) => signatureHash)) {
         const decoded = raw.fullTransaction.decode(hexToBytes(fixture.hex));
-        const actual = tx.getPreMlsagHash(
-          crypto.fastHash(raw.txPrefix.encode(decoded.prefix)),
-          decoded.rctSigBase,
-          decoded.rctSigPrunable.bulletproofsPlus[0]
-        );
+        const prefixHash = crypto.fastHash(raw.txPrefix.encode(decoded.prefix));
+        const actual = tx.getPreMlsagHash(prefixHash, decoded.rctSigBase, decoded.rctSigPrunable.bulletproofsPlus[0]);
         assert.strictEqual(bytesToHex(actual), fixture.signatureHash);
-      });
+      }
     });
   });
 
   describe('getTxId', () => {
-    it('should work', () => {
-      txFixtures.forEach((fixture) => {
-        const actual = tx.getTxId(hexToBytes(fixture.hex));
-        assert.strictEqual(bytesToHex(actual), fixture.id);
+    for (const {
+      label, hex, id,
+    } of [...txFixtures, ...constructFixtures].filter((fixture) => fixture.id)) {
+      it(label, () => {
+        assert.strictEqual(bytesToHex(tx.getTxId(hexToBytes(hex))), id);
       });
-    });
+    }
   });
 
   describe('estimateExtraSize', () => {
-    const stdWallet = () => {
-      const secretView = crypto.randomScalar();
-      const secretSpend = crypto.randomScalar();
-      return {
-        secretView,
-        publicSpendKey: crypto.secretKeyToPublicKey(secretSpend),
-        publicViewKey: crypto.secretKeyToPublicKey(secretView),
-        type: 'address',
-      };
-    };
-    const subWallet = () => {
-      const secretView = crypto.randomScalar();
-      const publicSpendKey = crypto.secretKeyToPublicKey(crypto.randomScalar());
-      return {
-        secretView,
-        publicSpendKey,
-        publicViewKey: crypto.encodePoint(crypto.decodePoint(publicSpendKey).multiplyUnsafe(secretView)),
-        type: 'subaddress',
-      };
-    };
-    const makeInput = (amount) => {
-      const keyOffset = crypto.randomScalar();
-      const mask = crypto.randomScalar();
-      return {
-        keyOffset, publicKey: crypto.secretKeyToPublicKey(keyOffset), amount, mask, commitment: ringct.pedersenCommitment(amount, mask), globalIndex: 1n, decoys: [],
-      };
-    };
-
-    // builds a real transaction for the full `outputs` list and returns the actual encoded
-    // tx_extra length, to cross-check estimateExtraSize against buildTxExtra.
-    function actualExtraSize(outputs) {
-      const sender = outputs.find((o) => o.isChange) ?? stdWallet();
-      const inputs = [makeInput(1000000n)];
-      const { bytes } = tx.createTransaction({
-        inputs, outputs, secretSpendKey: 0n, secretViewKey: sender.secretView,
+    for (const fixture of constructFixtures) {
+      it(`equals the extra size of ${fixture.label}`, () => {
+        assert.strictEqual(tx.estimateExtraSize(fixture.params().outputs), fixture.decode().prefix.extra.length);
       });
-      return raw.fullTransaction.decode(bytes).prefix.extra.length;
     }
 
-    it('single standard destination + change: no additional keys, short nonce', () => {
-      const outputs = [{ ...stdWallet(), amount: 500000n }, {
-        ...stdWallet(), isChange: true, amount: 0n,
-      }];
-      const size = tx.estimateExtraSize(outputs);
-      assert.strictEqual(size, 44);
-      assert.strictEqual(size, actualExtraSize(outputs));
-    });
-
-    it('single subaddress destination + change: R = r*D, no additional keys', () => {
-      const outputs = [{ ...subWallet(), amount: 500000n }, {
-        ...stdWallet(), isChange: true, amount: 0n,
-      }];
-      const size = tx.estimateExtraSize(outputs);
-      assert.strictEqual(size, 44);
-      assert.strictEqual(size, actualExtraSize(outputs));
-    });
-
-    it('standard + subaddress destinations: needs additional keys', () => {
-      const outputs = [
-        { ...stdWallet(), amount: 300000n },
-        { ...subWallet(), amount: 200000n },
-        {
-          ...stdWallet(), isChange: true, amount: 0n,
-        },
-      ];
-      const size = tx.estimateExtraSize(outputs);
-      assert.strictEqual(size, 131); // 33 + (2 + 32*3) additional pubkeys, no nonce (3 outputs)
-      assert.strictEqual(size, actualExtraSize(outputs));
-    });
-
-    it('two standard destinations, no change: two outputs, dummy nonce', () => {
-      const outputs = [
-        { ...stdWallet(), amount: 300000n },
-        { ...stdWallet(), amount: 200000n },
-      ];
-      const size = tx.estimateExtraSize(outputs);
-      assert.strictEqual(size, 44); // 33 + dummy payment id nonce (<= 2 outputs)
-      assert.strictEqual(size, actualExtraSize(outputs));
-    });
-
-    it('integrated address destination: always includes the nonce', () => {
-      const outputs = [
-        {
-          ...stdWallet(), type: 'integratedaddress', paymentID: randomBytes(8), amount: 500000n,
-        },
-        {
-          ...stdWallet(), isChange: true, amount: 0n,
-        },
-      ];
-      const size = tx.estimateExtraSize(outputs);
-      assert.strictEqual(size, 44);
-      assert.strictEqual(size, actualExtraSize(outputs));
+    // monero writes no nonce here; lib adds the dummy as monero-oxide does.
+    // https://github.com/monero-oxide/monero-oxide/blob/0.1.0/monero-oxide/wallet/src/send/tx.rs#L84-L96
+    it('two standard recipients without change: public key and dummy payment id, 33 + 11 bytes', () => {
+      assert.strictEqual(tx.estimateExtraSize([{ ...STANDARD, amount: 1n }, { ...OTHER_STANDARD, amount: 1n }]), 44);
     });
   });
 
-  describe('estimate tx size', () => {
-    it('should estimate tx size with 1 in 2 out', () => {
-      const size = tx.estimateTxSize(1, 10, 2, 44);
-      assert.strictEqual(size, 1366);
-    });
+  describe('fee estimation', () => {
+    // estimateTxSize/estimateTxWeight/estimateFee flags: bulletproof, clsag, bulletproofPlus, useViewTags
+    const BULLETPROOF_CLSAG = [true, true, false, false];
+    const CASES = [
+      {
+        inputs: 1, outputs: 2, size: [1366, 1460], weight: [1366, 1460], fee: [10510000n, 11150000n],
+      },
+      {
+        inputs: 2, outputs: 2, size: [1875, 1969], weight: [1875, 1969], fee: [15150000n, 15790000n],
+      },
+      {
+        inputs: 3, outputs: 3, size: [2527, 2620], weight: [2987, 3157], fee: [23910000n, 25070000n],
+      },
+    ];
 
-    it('should estimate tx size with 2 in 2 out', () => {
-      const size = tx.estimateTxSize(2, 10, 2, 44);
-      assert.strictEqual(size, 1875);
-    });
-
-    it('should estimate tx size with 3 in 3 out', () => {
-      const size = tx.estimateTxSize(3, 10, 3, 44);
-      assert.strictEqual(size, 2527);
-    });
-
-    it('should estimate tx size with 1 in 2 out (bulletproof & clsag)', () => {
-      const size = tx.estimateTxSize(1, 10, 2, 44, true, true, false, false);
-      assert.strictEqual(size, 1460);
-    });
-
-    it('should estimate tx size with 2 in 2 out (bulletproof & clsag)', () => {
-      const size = tx.estimateTxSize(2, 10, 2, 44, true, true, false, false);
-      assert.strictEqual(size, 1969);
-    });
-
-    it('should estimate tx size with 3 in 3 out (bulletproof & clsag)', () => {
-      const size = tx.estimateTxSize(3, 10, 3, 44, true, true, false, false);
-      assert.strictEqual(size, 2620);
-    });
+    for (const {
+      inputs, outputs, size, weight, fee,
+    } of CASES) {
+      it(`${inputs} in ${outputs} out, with the defaults and with Bulletproof and CLSAG`, () => {
+        assert.strictEqual(tx.estimateTxSize(inputs, 10, outputs, 44), size[0]);
+        assert.strictEqual(tx.estimateTxSize(inputs, 10, outputs, 44, ...BULLETPROOF_CLSAG), size[1]);
+        assert.strictEqual(tx.estimateTxWeight(inputs, 10, outputs, 44), weight[0]);
+        assert.strictEqual(tx.estimateTxWeight(inputs, 10, outputs, 44, ...BULLETPROOF_CLSAG), weight[1]);
+        assert.strictEqual(tx.estimateFee(inputs, 15, outputs, 44, 6836n, 1n, 10000n), fee[0]);
+        assert.strictEqual(tx.estimateFee(inputs, 15, outputs, 44, 6836n, 1n, 10000n, ...BULLETPROOF_CLSAG), fee[1]);
+      });
+    }
   });
-
-  describe('estimate tx weight', () => {
-    it('should estimate tx weight with 1 in 2 out', () => {
-      const weight = tx.estimateTxWeight(1, 10, 2, 44);
-      assert.strictEqual(weight, 1366);
-    });
-
-    it('should estimate tx weight with 2 in 2 out', () => {
-      const weight = tx.estimateTxWeight(2, 10, 2, 44);
-      assert.strictEqual(weight, 1875);
-    });
-
-    it('should estimate tx weight with 3 in 3 out', () => {
-      const weight = tx.estimateTxWeight(3, 10, 3, 44);
-      assert.strictEqual(weight, 2987);
-    });
-
-    it('should estimate tx weight with 1 in 2 out (bulletproof & clsag)', () => {
-      const weight = tx.estimateTxWeight(1, 10, 2, 44, true, true, false, false);
-      assert.strictEqual(weight, 1460);
-    });
-
-    it('should estimate tx weight with 2 in 2 out (bulletproof & clsag)', () => {
-      const weight = tx.estimateTxWeight(2, 10, 2, 44, true, true, false, false);
-      assert.strictEqual(weight, 1969);
-    });
-
-    it('should estimate tx weight with 3 in 3 out (bulletproof & clsag)', () => {
-      const weight = tx.estimateTxWeight(3, 10, 3, 44, true, true, false, false);
-      assert.strictEqual(weight, 3157);
-    });
-  });
-
-  describe('estimate tx fee', () => {
-    it('should estimate tx fee with 1 in 2 out', () => {
-      const fee = tx.estimateFee(1, 15, 2, 44, 6836n, 1n, 10000n);
-      assert.strictEqual(fee, 10510000n);
-    });
-
-    it('should estimate tx fee with 2 in 2 out', () => {
-      const fee = tx.estimateFee(2, 15, 2, 44, 6836n, 1n, 10000n);
-      assert.strictEqual(fee, 15150000n);
-    });
-
-    it('should estimate tx fee with 3 in 3 out', () => {
-      const fee = tx.estimateFee(3, 15, 3, 44, 6836n, 1n, 10000n);
-      assert.strictEqual(fee, 23910000n);
-    });
-
-    it('should estimate tx fee with 1 in 2 out (bulletproof & clsag)', () => {
-      const fee = tx.estimateFee(1, 15, 2, 44, 6836n, 1n, 10000n, true, true, false, false);
-      assert.strictEqual(fee, 11150000n);
-    });
-
-    it('should estimate tx fee with 2 in 2 out (bulletproof & clsag)', () => {
-      const fee = tx.estimateFee(2, 15, 2, 44, 6836n, 1n, 10000n, true, true, false, false);
-      assert.strictEqual(fee, 15790000n);
-    });
-
-    it('should estimate tx fee with 3 in 3 out (bulletproof & clsag)', () => {
-      const fee = tx.estimateFee(3, 15, 3, 44, 6836n, 1n, 10000n, true, true, false, false);
-      assert.strictEqual(fee, 25070000n);
-    });
-  });
-
 });

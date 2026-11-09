@@ -1,0 +1,72 @@
+{
+  "source": "https://github.com/monero-project/monero/blob/v0.18.5.1/tests/unit_tests/ver_rct_non_semantics_simple_cached.cpp#L215-L238",
+  "id": "e89415b95564aa7e3587c91422756ba5303e727996e19c677630309a0d52a7ca",
+  "rings": [
+    [
+      {
+        "key": "e50f476129d40af31e0938743f7f2d60e867aab31294f7acaf6e38f0976f0228",
+        "mask": "51e788ddf5c95c124a7314d45a91b52d60db25a0572de9c2b4ec515aca3d4481"
+      },
+      {
+        "key": "804245d067fcfe6cd66376db0571869989bc68b3e22a0f902109c7530df47a59",
+        "mask": "c3cc65d3b3a05defaa05213dc3b0496f9b86dbeeefbff28db34b134b6ee3230b"
+      },
+      {
+        "key": "527563a03b498e47732b815f5f0c5875a70e0fb71a37c88123f0f8686349fae4",
+        "mask": "04417c03b397cd11e403275ec89cb0ab5b8476bb88470e9ae7208ea63dacf073"
+      },
+      {
+        "key": "bffca8b5c7fe4235ba7136d6b5325f63df343dc147940b677f50217f8953bca6",
+        "mask": "5cd8c5e54e07275422c9c5a9f4a7268d26c494ffba419e878b7e873a02ae2e76"
+      },
+      {
+        "key": "1f73385ea74308aa78b5abf585faac14a5e78a6e23f0f68c9c14681108b28ef0",
+        "mask": "5c02b3156daaa8ec476d3244439d90efa266f3e51cb9c8eb384d8b9a8efaa024"
+      },
+      {
+        "key": "a2421eae8bb256644b34feeab48c6086c2c9feb40d2643436dc45e303eee8ab2",
+        "mask": "787823abffa988b56d4a7b4a834630f71520220fd82fad035955e616ec095788"
+      },
+      {
+        "key": "17d8d8dc1e1c25b7295f2eab44c4ccc08a629b8e8d781bbb6f9a51a9561bcd4c",
+        "mask": "db1ea24be6947e03176a297160dba16d65f37751bb0ef2ba71a4590d12b61dfc"
+      },
+      {
+        "key": "2c39348a9ab04dbabe3b5249819b7845ed8aaebd0d8eddd98bda0bf40753a398",
+        "mask": "4e6cd25fbd10e2e040be84e3bf8043c612daeef625e66a5e5bcff88c9c46e82c"
+      },
+      {
+        "key": "c4c97157f23b45c7084526aaa9958fe858bebe446a7efa22c491c439b74271b1",
+        "mask": "e251db2c86193a11a5bffefffe48c20e3d92a8dc98cb3a2f41704e565bcd860a"
+      },
+      {
+        "key": "d342045525139a8551bcdfa7aa0117d2ac2327cb6cf449ca59420c300e4471a5",
+        "mask": "789c11f72060ad80f4cda5d89b24d49f9435bf765598dea7a91776e99f05f87c"
+      },
+      {
+        "key": "9a972ccf2c74f648070b0be839749c98eca87166de401a6c1f59e64b938a46c1",
+        "mask": "5444cbed5cec31fb6ed1612f815d292f2bf3d2ff584bbcd8e5201ec59670d414"
+      },
+      {
+        "key": "49ccb806ccf5cbd74bae8d9fb2da8918ab61d0774ee6a6c3a6ccd237db22a088",
+        "mask": "0c5db942fb44f29f6ef956e24db91f98a6de6e7288b0b04d01b8f260453d1431"
+      },
+      {
+        "key": "74417e8d1483df2df6fe68c88fc9a72639c35d765b38351b838521addf45dadc",
+        "mask": "a1a606d6c4762ef51c1759bcb8b5c88be1d323025400c41fe6885431064b64dc"
+      },
+      {
+        "key": "48c4c349adaf7b3be27656ea70d1c83b93e1511bb0aac987861a4da9689b0e95",
+        "mask": "ad14ffd5edac199ea7c5437d558089b0f2f03aa74bde43611322d769968b5a1c"
+      },
+      {
+        "key": "2d2ffade0f85ddd83a036469e49542e93cad94f9bea535f0ea2eb2f56304517e",
+        "mask": "bcc48d00bd06dc5439200e749d0caf8a062b072d0c0eb1f78f6a4d8f2373e5f4"
+      },
+      {
+        "key": "4ee857d0ce17f66eca9c81eb326e404ceb50c8198248f2f827c440ee7aa0c0d7",
+        "mask": "a8a9d61d4abbfb123630ffd214c834cc45113eaa51dd2f904cc6ae0c3c5d70e3"
+      }
+    ]
+  ]
+}

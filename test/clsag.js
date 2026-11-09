@@ -14,6 +14,38 @@ import * as ringct from '../lib/ringct.js';
 import * as tx from '../lib/tx.js';
 import clsagRingData from './fixtures/clsag_ring_data.json' with { type: 'json' };
 import clsagTx from './fixtures/clsag_tx.json' with { type: 'json' };
+import { constructFixtures } from './helpers/construct.js';
+import e89415Ring from './fixtures/bpp_tx_e89415_ring.json' with { type: 'json' };
+import txFixtures from './fixtures/txs.json' with { type: 'json' };
+import { TORSION_ELEMENTS, addTorsion } from './helpers/common.js';
+
+// The CLSAG message of a decoded BulletproofPlus transaction.
+const messageOf = (decoded) => tx.getPreMlsagHash(
+  crypto.fastHash(raw.txPrefix.encode(decoded.prefix)),
+  decoded.rctSigBase,
+  decoded.rctSigPrunable.bulletproofsPlus[0]
+);
+
+// The verify arguments of every input of a real transaction, with its rings as { key, mask } hex.
+function realInputs(hex, rings) {
+  const decoded = raw.fullTransaction.decode(hexToBytes(hex));
+  const message = messageOf(decoded);
+  return decoded.prefix.vin.map((vin, i) => ({
+    message,
+    ring: rings[i].map(({ key, mask }) => ({ publicKey: hexToBytes(key), commitment: hexToBytes(mask) })),
+    pseudoOut: decoded.rctSigPrunable.pseudoOuts[i],
+    signature: { ...decoded.rctSigPrunable.CLSAGs[i], I: vin.data.keyImage },
+  }));
+}
+
+// https://github.com/monero-oxide/monero-oxide/blob/0.1.0/monero-oxide/src/tests/transaction.rs#L221-L290
+const OXIDE_INPUTS = realInputs(clsagTx.hex, clsagRingData);
+// https://github.com/monero-project/monero/blob/v0.18.5.1/tests/unit_tests/ver_rct_non_semantics_simple_cached.cpp#L215-L238
+const E89415_INPUTS = realInputs(txFixtures.find((fixture) => fixture.id === e89415Ring.id).hex, e89415Ring.rings);
+
+const verify = ({
+  message, ring, pseudoOut, signature,
+}) => clsag.verifyClsag(message, ring, pseudoOut, signature);
 
 // Build a valid ring with the real input at `index`, balanced (input amount == pseudoOut amount),
 // so that C_nonzero[index] - pseudoOut = z*G with z = inMask - pseudoOutMask.
@@ -51,7 +83,89 @@ function setup(n, index) {
 }
 
 describe('clsag', () => {
-  describe('sign + verify round-trip', () => {
+  describe('verifyClsag on real transactions', () => {
+    it('verifies the monero-oxide CLSAG vector', () => {
+      assert.equal(OXIDE_INPUTS.length, 2);
+      for (const input of OXIDE_INPUTS) {
+        assert.ok(verify(input));
+      }
+    });
+
+    it('verifies the mainnet transaction e89415 of monero', () => {
+      assert.ok(verify(E89415_INPUTS[0]));
+    });
+
+    it('rejects e89415 when one ring commitment changes', () => {
+      const [input] = E89415_INPUTS;
+      const commitment = input.ring[5].commitment.slice();
+      commitment[0] ^= 1;
+      const ring = input.ring.map((member, i) => (i === 5 ? { ...member, commitment } : member));
+      assert.ok(!verify({ ...input, ring }));
+    });
+
+    for (const fixture of constructFixtures) {
+      it(`verifies every CLSAG of ${fixture.label}`, () => {
+        const decoded = fixture.decode();
+        const message = messageOf(decoded);
+        decoded.prefix.vin.forEach((vin, i) => {
+          assert.ok(clsag.verifyClsag(message, fixture.ringOf(vin), decoded.rctSigPrunable.pseudoOuts[i], {
+            ...decoded.rctSigPrunable.CLSAGs[i], I: vin.data.keyImage,
+          }));
+        });
+      });
+    }
+  });
+
+  // https://github.com/monero-project/monero/blob/v0.18.5.1/src/ringct/rctSigs.cpp#L872-L895
+  describe('verifyClsag rejects malformed signatures of the monero-oxide vector', () => {
+    const [input] = OXIDE_INPUTS;
+    const IDENTITY = hexToBytes('0100000000000000000000000000000000000000000000000000000000000000');
+    const nonCanonical = (scalar) => helpers.encodeInt(helpers.decodeInt(scalar) + crypto.CURVE.n);
+
+    it('rejects an empty ring', () => {
+      assert.ok(!verify({
+        ...input, ring: [], signature: { ...input.signature, s: [] },
+      }));
+    });
+
+    it('rejects a non-canonical s scalar', () => {
+      const s = input.signature.s.map((scalar, i) => (i === 3 ? nonCanonical(scalar) : scalar));
+      assert.ok(!verify({ ...input, signature: { ...input.signature, s } }));
+    });
+
+    it('rejects a non-canonical c1', () => {
+      assert.ok(!verify({ ...input, signature: { ...input.signature, c1: nonCanonical(input.signature.c1) } }));
+    });
+
+    it('rejects the identity as key image', () => {
+      assert.ok(!verify({ ...input, signature: { ...input.signature, I: IDENTITY } }));
+    });
+
+    it('rejects an auxiliary key image D of small order', () => {
+      for (const D of [IDENTITY, ...TORSION_ELEMENTS]) {
+        assert.ok(!verify({ ...input, signature: { ...input.signature, D } }));
+      }
+    });
+
+    // https://github.com/monero-oxide/monero-oxide/blob/0.1.0/monero-oxide/ringct/clsag/src/tests/mod.rs#L70-L85
+    it('rejects a ring member with a torsion component', () => {
+      const publicKey = addTorsion(input.ring[0].publicKey, TORSION_ELEMENTS[1]);
+      const ring = input.ring.map((member, i) => (i === 0 ? { ...member, publicKey } : member));
+      assert.ok(!verify({ ...input, ring }));
+    });
+
+    it('rejects a ring member that is not a point', () => {
+      const publicKey = new Uint8Array(32).fill(0xff);
+      const ring = input.ring.map((member, i) => (i === 0 ? { ...member, publicKey } : member));
+      assert.ok(!verify({ ...input, ring }));
+    });
+
+    it('rejects a pseudo output that is not a point', () => {
+      assert.ok(!verify({ ...input, pseudoOut: new Uint8Array(32).fill(0xff) }));
+    });
+  });
+
+  describe('proveClsag + verifyClsag round-trip', () => {
     for (const [n, index] of [[1, 0], [2, 0], [2, 1], [11, 0], [11, 5], [11, 10], [16, 15]]) {
       it(`ring size ${n}, real index ${index}`, () => {
         const {
@@ -69,9 +183,13 @@ describe('clsag', () => {
       message, ring, pseudoOut, signer,
     } = setup(8, 3);
     for (const index of [8, -1, 1.5, NaN, '1']) {
-      assert.throws(() => clsag.proveClsag(message, ring, pseudoOut, { ...signer, index }));
+      assert.throws(() => {
+        clsag.proveClsag(message, ring, pseudoOut, { ...signer, index });
+      });
     }
-    assert.throws(() => clsag.proveClsag(message, [], pseudoOut, { ...signer, index: 0 }));
+    assert.throws(() => {
+      clsag.proveClsag(message, [], pseudoOut, { ...signer, index: 0 });
+    });
   });
 
   it('key image matches generateKeyImage', () => {
@@ -82,30 +200,8 @@ describe('clsag', () => {
     assert.equal(bytesToHex(sig.I), bytesToHex(crypto.generateKeyImage(real.pub, real.sec)));
   });
 
-  it('verifies the fixed monero-oxide CLSAG tx vector', () => {
-    const parsed = raw.fullTransaction.decode(hexToBytes(clsagTx.hex));
-    const message = tx.getPreMlsagHash(
-      crypto.fastHash(raw.txPrefix.encode(parsed.prefix)),
-      parsed.rctSigBase,
-      parsed.rctSigPrunable.bulletproofsPlus[0]
-    );
-    assert.equal(parsed.prefix.vin.length, clsagRingData.length);
-    assert.equal(parsed.rctSigPrunable.CLSAGs.length, clsagRingData.length);
-    for (let i = 0; i < clsagRingData.length; i++) {
-      const ring = clsagRingData[i].map((out) => ({
-        publicKey: hexToBytes(out.key),
-        commitment: hexToBytes(out.mask),
-      }));
-      const sig = {
-        ...parsed.rctSigPrunable.CLSAGs[i],
-        I: parsed.prefix.vin[i].data.keyImage,
-      };
-      assert.ok(clsag.verifyClsag(message, ring, parsed.rctSigPrunable.pseudoOuts[i], sig));
-    }
-  });
-
   // mirrors monero TEST(ringct, CLSAG)
-  // https://github.com/monero-project/monero/blob/v0.18.5.0/tests/unit_tests/ringct.cpp#L141-L300
+  // https://github.com/monero-project/monero/blob/v0.18.5.1/tests/unit_tests/ringct.cpp#L141-L300
   describe('rejects invalid signatures', () => {
     // bad inputs at signing time → must fail verification
     it('wrong real index at creation', () => {
@@ -254,12 +350,8 @@ describe('clsag', () => {
         message, ring, signer, pseudoOut,
       } = setup(8, 3);
       const sig = clsag.proveClsag(message, ring, pseudoOut, signer);
-      // add an order-8 torsion point to D (same constant as the monero unit test)
-      const torsion = crypto.decodePoint(
-        hexToBytes('c7176a703d4dd84fba3c0b760d10670f2a2053fa2c39ccc64ec7fd7792ac03fa')
-      );
-      const D = crypto.encodePoint(crypto.decodePoint(sig.D).add(torsion));
-      assert.ok(!clsag.verifyClsag(message, ring, pseudoOut, { ...sig, D }));
+      // the same order-8 point as the monero unit test
+      assert.ok(!clsag.verifyClsag(message, ring, pseudoOut, { ...sig, D: addTorsion(sig.D, TORSION_ELEMENTS[0]) }));
     });
   });
 });

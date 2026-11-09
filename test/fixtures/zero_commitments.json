@@ -1,0 +1,697 @@
+{
+  "source": "https://github.com/monero-project/monero/blob/v0.18.5.1/src/ringct/rctOps.cpp#L44-L218",
+  "commitments": [
+    {
+      "amount": "0",
+      "commitment": "5866666666666666666666666666666666666666666666666666666666666666"
+    },
+    {
+      "amount": "1",
+      "commitment": "1738eb7a677c6149228a2beaa21bea9e3370802d72a3eec790119580e02bd522"
+    },
+    {
+      "amount": "2",
+      "commitment": "762484630a0617178d0e33f32e0e113ea846869d464b0b6ff13b2997049cda7d"
+    },
+    {
+      "amount": "3",
+      "commitment": "cff77b56621c4fef74cf37c178d4b58af4ad8cd435fcb96276bc159c7c6a288c"
+    },
+    {
+      "amount": "4",
+      "commitment": "9ab86c31f422d821b5225730d1bf730a9b91d2eee314b84ebd4b93a681618266"
+    },
+    {
+      "amount": "5",
+      "commitment": "32ee2f659af63858c2f7dc111b3bb8fec02cac42383bb736de01086f38f0123c"
+    },
+    {
+      "amount": "6",
+      "commitment": "47262b1ea643016e38241753a4fb39929e31ea9bd3411ab17f166e61f60ce5a7"
+    },
+    {
+      "amount": "7",
+      "commitment": "c6329368799a0ded4c20256bffe64547f17bc4239504be824dff8a2be1afe3cd"
+    },
+    {
+      "amount": "8",
+      "commitment": "d5f150743346190f842b06b8fae120eb85247e9f6dec88ffa223bf6994e9c8c2"
+    },
+    {
+      "amount": "9",
+      "commitment": "560023329ec0faf33b5e3a5cb4eaefee38f8961c88b66a2f19d45951969c6d1f"
+    },
+    {
+      "amount": "10",
+      "commitment": "0380dc24cc97cce658c3a947c51025de1a69803bdb5005e3b7dda90d6859b01c"
+    },
+    {
+      "amount": "20",
+      "commitment": "0903f62e97764758fef89e5bec29ef4fc5e6454b2d47444736044c252ee28eba"
+    },
+    {
+      "amount": "30",
+      "commitment": "a28b89e00bed6231685bf97436f2ba51a251557f8d170a78e312d624bf60fffe"
+    },
+    {
+      "amount": "40",
+      "commitment": "b5c695556a2847b20e1cbb26e6a9c68a61c550ceb7c304fe92283d29a9b243cb"
+    },
+    {
+      "amount": "50",
+      "commitment": "128ec6cdc06b43c5d09c3f652ae3447f9b3f2c30912df080370085bc0c09ef78"
+    },
+    {
+      "amount": "60",
+      "commitment": "1f9f403aaea716fbe298a814f1eebc1b73168c37fae316eb6505816fc220ebfb"
+    },
+    {
+      "amount": "70",
+      "commitment": "10a238c5e48e4b9399dba6cbd98e63544159e98c935ac0603d72de0fff3153bb"
+    },
+    {
+      "amount": "80",
+      "commitment": "75ab78c7281f6928f09486057a63641827c57484e3e99a39f312a43a519bda08"
+    },
+    {
+      "amount": "90",
+      "commitment": "e9567ba788b85b82c8657a15a548995cf6b0bdd1c62ada7755f2323ad8a40851"
+    },
+    {
+      "amount": "100",
+      "commitment": "b61736d5f28def28616afc4793e99b27cd3e89fb91c113d4307365fb75dedf88"
+    },
+    {
+      "amount": "200",
+      "commitment": "7103eb721928d7919987f350caa57ae7b08157153b4c430d3edec0c203079744"
+    },
+    {
+      "amount": "300",
+      "commitment": "24409e922eced1a05e4eaca3df9119c38a922e0b66d02d9dd2fb1dcc20b9afc7"
+    },
+    {
+      "amount": "400",
+      "commitment": "a7729fa93281829934115d475a67860a1412c5e5951220d960c241a0191a9e65"
+    },
+    {
+      "amount": "500",
+      "commitment": "2e530c061c6d9e97abaf468c32b0ada749225772fcd11741cb5c035cdd26140e"
+    },
+    {
+      "amount": "600",
+      "commitment": "a50b91099df1b1694f30b58fe6776850dbdbf46ced997f5262a851594074a59d"
+    },
+    {
+      "amount": "700",
+      "commitment": "512c0faeccbef2fee5754c6a45fdc0752d4f1522e77ff0c48dcb19918a6884e0"
+    },
+    {
+      "amount": "800",
+      "commitment": "daa9f9a5b9713333e98c05ace727cc0e7dc3f15949e1ef4d94fa47d68a34c675"
+    },
+    {
+      "amount": "900",
+      "commitment": "c72b18c917cd43ee78405e398398b83ac0977b251990d8130c38ba53b63db4f7"
+    },
+    {
+      "amount": "1000",
+      "commitment": "01df6091eb6a48e9e422250be38388c861b65555a720ad153586fe2bd22fa23d"
+    },
+    {
+      "amount": "2000",
+      "commitment": "24f5b1347846af22b56f4125b3e7678cf84b4fd2f92e1c40aa3a1be0c74d95e6"
+    },
+    {
+      "amount": "3000",
+      "commitment": "a71c9a8f40c1259c36262773e00820183e6b59e071c99b349bef8f7ed2c6adb9"
+    },
+    {
+      "amount": "4000",
+      "commitment": "98dc74af1989d34b642eb3062dbc9dcad801c56527069399e7c411ad142882f6"
+    },
+    {
+      "amount": "5000",
+      "commitment": "6176ac4ac0065e49d6c441cf404faddaad44930ef03c6809add777e42fee7f10"
+    },
+    {
+      "amount": "6000",
+      "commitment": "78790465f6605b5a8477365aa6c2a4a584910c23950292975249a1ad7df0f7e8"
+    },
+    {
+      "amount": "7000",
+      "commitment": "20a5606b602395d68e2fad8ec67f92de89c63e1e7fc1dd7f92ffedb8f655fb0d"
+    },
+    {
+      "amount": "8000",
+      "commitment": "9a789743986517d95f4e808bebe6520de6cf8c5135ab36087e87e276ac6a3401"
+    },
+    {
+      "amount": "9000",
+      "commitment": "5fc7aa48bb191358c7e34d24cf9c311674127ab245d08f4e2cfdbf8f05c95bf5"
+    },
+    {
+      "amount": "10000",
+      "commitment": "6120e776e912ab105a49f9da02a67517c0a90b2b3e2da30dff343993dbec9597"
+    },
+    {
+      "amount": "20000",
+      "commitment": "77bfb537ac0abc41aa21d0ecd9181334d86ba7865a9447f5c1589a81d7efb3bb"
+    },
+    {
+      "amount": "30000",
+      "commitment": "35f405a95f75192ae9c0d4f588844714f6851b97cebd9f7c02c5ddd7bf58ff31"
+    },
+    {
+      "amount": "40000",
+      "commitment": "7755bb3f387c21b8a0f4481fbfa88abeeecec75653fca1895839c1ba06479f96"
+    },
+    {
+      "amount": "50000",
+      "commitment": "8b7e84a337b7b9cd5db3633308ad5186a3590dffb8231e2f31fd2042549ffbe2"
+    },
+    {
+      "amount": "60000",
+      "commitment": "effda62515eab1bc1ebd7492949b0122c39f710a6516ec668c3761e6cc361f25"
+    },
+    {
+      "amount": "70000",
+      "commitment": "16ba8900f36f0f6c461c0be764aeee488606b053eddc10b59a3edecd23d44fc0"
+    },
+    {
+      "amount": "80000",
+      "commitment": "4dd4703b7b7fcfe72a2e4f31a43417f9c0da642fd0a929b8f5edd8037f93c5b3"
+    },
+    {
+      "amount": "90000",
+      "commitment": "8efc032040bd9041da3db09ba13da2a5d1b812030a5a367c5894bd541109e730"
+    },
+    {
+      "amount": "100000",
+      "commitment": "bd2eb19783571cf2222c810b690fc7666457ae20925b9005cee61df2666fdcb7"
+    },
+    {
+      "amount": "200000",
+      "commitment": "83d4cdddc1448732f2977c41aaa71fe6de9c176da899eebffc1b0ba9ea929790"
+    },
+    {
+      "amount": "300000",
+      "commitment": "ccc06b44c30138063045ed01d245d81403b63652ebc4f9967f0d7f38697f4616"
+    },
+    {
+      "amount": "400000",
+      "commitment": "1bbfe70ecaf1ddd7f10236f68a41000b5dab2d475cb92f62c2d684cf5769fb84"
+    },
+    {
+      "amount": "500000",
+      "commitment": "f1b1cdaa781495360f533181aa58c8bdae6a7798d02dab6d562681276709e701"
+    },
+    {
+      "amount": "600000",
+      "commitment": "d5267d60d4fe9bc5fefa7d3fe07cd1fad45573d5ae1910da073e6d2df9e20439"
+    },
+    {
+      "amount": "700000",
+      "commitment": "0b581125c2c483c9a3d8bc08322f26aa1fc50e41532c1b9df626b009d78867cf"
+    },
+    {
+      "amount": "800000",
+      "commitment": "f5b3d18f66d0f9175c3083b5f8078eafa89ef81de71508bc251f5c5fe7252e06"
+    },
+    {
+      "amount": "900000",
+      "commitment": "01de402c4b0043042eae9edea1492b9d82b7bc3668e9b584b0313d4450534074"
+    },
+    {
+      "amount": "1000000",
+      "commitment": "534b85c7893f66f026b65ed7e7a4b8c9f40be31bcd0a3dcd27c4710256516503"
+    },
+    {
+      "amount": "2000000",
+      "commitment": "cdb5dafa5310f5262ffc0926d0df6eebee2d52a98dc69f0dc5e4ebf0c1a8772e"
+    },
+    {
+      "amount": "3000000",
+      "commitment": "9e7563f03359ea31e291e7f0b87417bcf5b234ee8b7e5b044173bf0046867c57"
+    },
+    {
+      "amount": "4000000",
+      "commitment": "fd2aeb0d5ee53b77f2b1e3ac752d19389fc5baa0f8d76448a59f9985a48d0a25"
+    },
+    {
+      "amount": "5000000",
+      "commitment": "c0be4fb877b9ce508771323bcf1fb9484710ee23020006c3e8caac6e4f02fabf"
+    },
+    {
+      "amount": "6000000",
+      "commitment": "fc445ca384f33e558dc156449d3fba6afd54c342e635110fe79c16c717f7d4f7"
+    },
+    {
+      "amount": "7000000",
+      "commitment": "d8092b8d45db54a56d64e8094a0622e26e8a2eecb903b2e1f75a837b3ad8554a"
+    },
+    {
+      "amount": "8000000",
+      "commitment": "10045c91dbad8a6a81624ae0cf205db9973ee8423e97af58a61cfa7a7866f401"
+    },
+    {
+      "amount": "9000000",
+      "commitment": "115c209ee1def310cec9a6d16ce627ecbdb9ff2c23093c24c86c1bf250d4b585"
+    },
+    {
+      "amount": "10000000",
+      "commitment": "2f99d9744418660949ba433561c605b6f7be8f820a93cb2aeda97c8732925649"
+    },
+    {
+      "amount": "20000000",
+      "commitment": "c6771fab140b75f4efd097fce1826b80bae316bcec28869b3a1bf1bc6e4d2043"
+    },
+    {
+      "amount": "30000000",
+      "commitment": "a1e9ed3ef65a9d526cc26205881201d8a8f2c4409fa364107296b9f96a61b358"
+    },
+    {
+      "amount": "40000000",
+      "commitment": "b5312dc77294ab9bc8bfd1391e9aca9245e228f74b4974fc29ad1c31cbe3e6a3"
+    },
+    {
+      "amount": "50000000",
+      "commitment": "b8abc9fff6841d2ea0135a2172d3a70bfc2b702208cd4a43c630beb1b8a0328b"
+    },
+    {
+      "amount": "60000000",
+      "commitment": "6390e1db81b0ea5ce2739414e52b0798d82eb8e9aec56dfe7e2c6411ab794187"
+    },
+    {
+      "amount": "70000000",
+      "commitment": "7e51afee5bc971529d644dcd7f2a2ab02669ce2cb507a62dfc93176cb6df4138"
+    },
+    {
+      "amount": "80000000",
+      "commitment": "f37b946b8b2488ebee1c06c127fbe5fa5efd62369dd5aadaedd888501d3b7e3b"
+    },
+    {
+      "amount": "90000000",
+      "commitment": "46cb7657f61c837cec8074bbb0f52e7fc59a0d94e017009abe25652e4ad2e53d"
+    },
+    {
+      "amount": "100000000",
+      "commitment": "667b8e6f6a4b918976d9735a43367dc7592c87d0a1f815c6e87df11a13509fb2"
+    },
+    {
+      "amount": "200000000",
+      "commitment": "3bcb514801641b6255938cc503762d35ce06d75fe950959a1aab214b509b100b"
+    },
+    {
+      "amount": "300000000",
+      "commitment": "a5926f031e6b15eb86235108abb1af90c5b162c3998c8bbb3ffbb0729da9457b"
+    },
+    {
+      "amount": "400000000",
+      "commitment": "fe35b69944410eaf815bdcd0a4d71ef9fc668648ad43743b035aed2c17c1387a"
+    },
+    {
+      "amount": "500000000",
+      "commitment": "2222d670b87d9b47b8b95c8c397bc52e2b46a648b002a0485a375cd81f4a545f"
+    },
+    {
+      "amount": "600000000",
+      "commitment": "d3238a4a8b71ab46d15304acfa2f40bf5ea63b3d864a79fa8425d2655ae7076f"
+    },
+    {
+      "amount": "700000000",
+      "commitment": "a8ff283fcff053d344c8f7564f4024b66bfa459f476f0d730c9139908b2d647e"
+    },
+    {
+      "amount": "800000000",
+      "commitment": "f2daf888c4465701c0e61e12c3fbd4ea79c7ecb4f0c4b154c51a24d1e92128ba"
+    },
+    {
+      "amount": "900000000",
+      "commitment": "116ae5d29cec72aac557cb14e2cdd553e588ff8b8178260199c40caea212cb63"
+    },
+    {
+      "amount": "1000000000",
+      "commitment": "8ce64833cec900cb6d5ac46fc0237d8f2439c3dfa238baf9cc94166ad2e89887"
+    },
+    {
+      "amount": "2000000000",
+      "commitment": "378d3c5dbba4823d3312bb61fc0675a1bb3989f39701eb0d5ce4de5b0d907472"
+    },
+    {
+      "amount": "3000000000",
+      "commitment": "7fa2d0a599e7972e74cb75f98af484fc8519cb7e25b984a76d8bc2ba8dafded8"
+    },
+    {
+      "amount": "4000000000",
+      "commitment": "da3acb00ab2d8dccacec8f775921c40e26b1ffbeca9eb7e657256f5968f2341c"
+    },
+    {
+      "amount": "5000000000",
+      "commitment": "3406d79a50d814a9cced3b2404ed3e1b8da621988c43b1936942f4940ac5bf6a"
+    },
+    {
+      "amount": "6000000000",
+      "commitment": "f83ee8c162fc52a0089f46e829c2eaf6a19fd596cd12b3e819d56769440f7b4e"
+    },
+    {
+      "amount": "7000000000",
+      "commitment": "8c727d2457f34b2fdb6adf691ab35faae4ff234c28b44e9fd3718eefec417580"
+    },
+    {
+      "amount": "8000000000",
+      "commitment": "4a2e2f76e35dcba897a3ae72c4270d9c131714ed191b555c5e01e4757cbae72c"
+    },
+    {
+      "amount": "9000000000",
+      "commitment": "3f9f0c04c0b9ec9b4d117c5fc9f18a20f2b3facca4c8ae41af7c08e9e0efb981"
+    },
+    {
+      "amount": "10000000000",
+      "commitment": "97c92a29015ecb49f8090545e01ff9786cae40577347611824f4b6599ff5d364"
+    },
+    {
+      "amount": "20000000000",
+      "commitment": "09baed9a3c44b22285a0aea4148ca7de9bea963cf69623b683445c0a10a58677"
+    },
+    {
+      "amount": "30000000000",
+      "commitment": "45acaf1de2896de87284ffed578b7714f518a618e2ae6f90ae4f7013a28e99e0"
+    },
+    {
+      "amount": "40000000000",
+      "commitment": "08b847364224e29ce3366393c2e11efc7555dee1a05f91a72e61117684ddbe29"
+    },
+    {
+      "amount": "50000000000",
+      "commitment": "6c8e0e4a634f859a31ab2f7a78c0c4a5938cb77f033550a47d7e3181b6b26ec0"
+    },
+    {
+      "amount": "60000000000",
+      "commitment": "66c2a00965f9bfcbb11ea03cf1d631b00e8a1ef7a60b1be4a5ac09230bf8173f"
+    },
+    {
+      "amount": "70000000000",
+      "commitment": "6351d774c02c5a9deecfdbab709668598c47e4b1782ce5ae316af740a66f7e30"
+    },
+    {
+      "amount": "80000000000",
+      "commitment": "5accfd162279a51c8b3bd5d3679e918967a264ea063d37dff5e3457ec307d457"
+    },
+    {
+      "amount": "90000000000",
+      "commitment": "b747fc01c6f0c749673a2910250c2e23cb38274d63b42f521b846356e413618f"
+    },
+    {
+      "amount": "100000000000",
+      "commitment": "0942843d6f69e1cf3d99c99f0c97c0e6e578935af6a8bdb8f81d5b90bde7cc10"
+    },
+    {
+      "amount": "200000000000",
+      "commitment": "564c64ea50e4bd20db585db587b1f764a262d846a6b0a24b432760d2f9de665b"
+    },
+    {
+      "amount": "300000000000",
+      "commitment": "ac6583415bd64c033597f928a4b5d4f4789ea8b287827389a81eb6629ec5b850"
+    },
+    {
+      "amount": "400000000000",
+      "commitment": "52f49d89cf74132fc7432e6a6befcff3fd13d63b5160ab1ce64ab0d121cda99a"
+    },
+    {
+      "amount": "500000000000",
+      "commitment": "e9aa7c81cdb5b3148fb7628063cd7a07d1add1643cedd3fa34479d859cc56265"
+    },
+    {
+      "amount": "600000000000",
+      "commitment": "9827ae31e5c2a77839f60b83ab4578e2a01efa4b3b14cc727314ffd7155363bf"
+    },
+    {
+      "amount": "700000000000",
+      "commitment": "72916a7927ff1324d49840ecc09868b8f315e4f1f6d4458d375ec745fc2e6353"
+    },
+    {
+      "amount": "800000000000",
+      "commitment": "6676e0040fa4b8229c61690c713222cf3d37b9493b490680bb48d8d51ade95f2"
+    },
+    {
+      "amount": "900000000000",
+      "commitment": "4154b3465a4372671ea9e064a7caa66e14b4986a4668918afa579bf1ed2506dd"
+    },
+    {
+      "amount": "1000000000000",
+      "commitment": "bb6f7062ca306d672a730e2a2f219bdbe40c9fb3fe4d6013692af93cdb2e0cd1"
+    },
+    {
+      "amount": "2000000000000",
+      "commitment": "bc0eae5b9c6ad6387a41193c46f3c1d0716d77d64e22b2e07b4bce756765a20b"
+    },
+    {
+      "amount": "3000000000000",
+      "commitment": "100c6f1342b71b73edddc5492be923182f00a683488ec3a2a1c7a949cbe57768"
+    },
+    {
+      "amount": "4000000000000",
+      "commitment": "419f7c949104340fd3ce85948d2ef9f0dd4bb3d92f5a782c5f7804b7529a13c6"
+    },
+    {
+      "amount": "5000000000000",
+      "commitment": "40653498bea022e3365a03e57525ba65965376244fff10730ed97a73b7530191"
+    },
+    {
+      "amount": "6000000000000",
+      "commitment": "db1c7cf60891f965eba9c6022400630e00479534e6f5b533dcfc831938522c78"
+    },
+    {
+      "amount": "7000000000000",
+      "commitment": "59a03a3153a994d72327e4d92421d3e3291b1fa1b240de44b92d7f62ec0128f1"
+    },
+    {
+      "amount": "8000000000000",
+      "commitment": "b280b93b1e43880073ea4aa0ef1104f824bd127a4a3da21392650fe8c655b6c5"
+    },
+    {
+      "amount": "9000000000000",
+      "commitment": "daf0d3e93217d8e95abfddf13b7fd48e3447ad092326b899ed581fd5f806c506"
+    },
+    {
+      "amount": "10000000000000",
+      "commitment": "163dd682ec977cdda59531da3ffa72998a6f8837abadc636aaedc8be19b2d7c7"
+    },
+    {
+      "amount": "20000000000000",
+      "commitment": "02fa353aa84ea8c44c8023065d7941606b1fa5c264dccf46dc6494ebe9606f20"
+    },
+    {
+      "amount": "30000000000000",
+      "commitment": "87050dabf5b23e8b79813f4ed76aa4add225dd2a5089af067da77ccb6ec55946"
+    },
+    {
+      "amount": "40000000000000",
+      "commitment": "aae6b2c8a29e4dbc6376c17205fb0285e7d7d325323cd5260f98adfff7d4d4fb"
+    },
+    {
+      "amount": "50000000000000",
+      "commitment": "9d79288212a1e23c099fb2d8f0d0dbd3c2ecd758b9e6b5b4f29060079f19669f"
+    },
+    {
+      "amount": "60000000000000",
+      "commitment": "1890106f1b97bc2d0ae396e5e55ebfcc8ef6917fb196cb2b1e80255d54b68710"
+    },
+    {
+      "amount": "70000000000000",
+      "commitment": "57d34ef7543be47b7bf497ce4a176e78c6d65cd327f64ba75c27d157b337125d"
+    },
+    {
+      "amount": "80000000000000",
+      "commitment": "5ecb10154b96cab55e094683f8dbff7f56635fa66497ee9e240e83637c7c8772"
+    },
+    {
+      "amount": "90000000000000",
+      "commitment": "423269985130f166516a5ba861096d72eccc67adaba45eb3739a0ebc61a320ae"
+    },
+    {
+      "amount": "100000000000000",
+      "commitment": "a8d1609591498fa7c29427ad8931af36c52dc97b4a11e747a956c28c4254cfd4"
+    },
+    {
+      "amount": "200000000000000",
+      "commitment": "23144900a866e8c1bf4098daa948b986f3840e5a7d215ef0d564efd8bec68315"
+    },
+    {
+      "amount": "300000000000000",
+      "commitment": "6a51473c86edad53514b3f9597ed21ae008151a09e43addd45d17463c5340397"
+    },
+    {
+      "amount": "400000000000000",
+      "commitment": "08bdd4c3e4531b297a70001eb8a4f198dc3bd4f1f5609ada98f6d95f9a1a302e"
+    },
+    {
+      "amount": "500000000000000",
+      "commitment": "975570ea12de5af5c536bdb68354fbc8322150fc56837c4b78a985765d2a7099"
+    },
+    {
+      "amount": "600000000000000",
+      "commitment": "a7a6399341cb4d6776cd940d1d6ab0ac0abf56936a3531dfe96c2369978e49fa"
+    },
+    {
+      "amount": "700000000000000",
+      "commitment": "55093e5eebca038848dc997e3195ecc58fb4a571b95256c0ff49bed0f16522bd"
+    },
+    {
+      "amount": "800000000000000",
+      "commitment": "bbc6180224afd338a6f4a06b11984068eb3635e7e54766697883afbdcead2f31"
+    },
+    {
+      "amount": "900000000000000",
+      "commitment": "613aa12cc0a19bc8436350bbc0f616326e648583334a32651629e905c5206269"
+    },
+    {
+      "amount": "1000000000000000",
+      "commitment": "52ddf88113a0fcf2129095c61891be885c093008ebc4650cb0eea560cd4d751b"
+    },
+    {
+      "amount": "2000000000000000",
+      "commitment": "75bdfc35a6df76e5988ed9e310a58916aef0c5f05b8922eaae2cf98f58423ce3"
+    },
+    {
+      "amount": "3000000000000000",
+      "commitment": "889893e87d569f14b248d1ed93e8ce60bbe37369b0d6c7a1868933d3c3da9a72"
+    },
+    {
+      "amount": "4000000000000000",
+      "commitment": "883ef34ba2c191f49d3cc6ada0aff1cfb177bd9ed4b3a53784b7f1629bed1741"
+    },
+    {
+      "amount": "5000000000000000",
+      "commitment": "a2907c3984b14ab1f4da58c2c82d6b24f129490975fc4a333d25a1f92bc432b6"
+    },
+    {
+      "amount": "6000000000000000",
+      "commitment": "a07d9f18951ff232cf4ec0ee2fbcc3e11b2cafc957658210381e3ee4edec2e7a"
+    },
+    {
+      "amount": "7000000000000000",
+      "commitment": "668021d5de8ca4c18f5a74f27869c4d6d493a330393cf02641ffa8567ba53620"
+    },
+    {
+      "amount": "8000000000000000",
+      "commitment": "e0487ac45a8259e3e5f2d9b8f6b8fa269a634971a2f7c21a54177681eb02bd4a"
+    },
+    {
+      "amount": "9000000000000000",
+      "commitment": "98926a3af05bf4a98df9f64ae7b9da45a706c3f8395e471f96ed3c0606bebb71"
+    },
+    {
+      "amount": "10000000000000000",
+      "commitment": "80adb70d46f63a7564a3f671d9ba9571b7f795a963382a4d9faf2d54f6c68429"
+    },
+    {
+      "amount": "20000000000000000",
+      "commitment": "aebd97421f3fcae8951860e6d9d1f3ec5973a2f766884bfe17507951e462c663"
+    },
+    {
+      "amount": "30000000000000000",
+      "commitment": "61026c842a6a2225746b196b5689e118f5413415981d077362b2e7b9aca52816"
+    },
+    {
+      "amount": "40000000000000000",
+      "commitment": "5254b578e8579a273b898e659dd3e1a1cfba12472664bd4e7f9a13b1fcee0293"
+    },
+    {
+      "amount": "50000000000000000",
+      "commitment": "7b2a0b00cfdca95146cf8095dd2b829091b0f2d5bb0c33822d8b434269cd2a42"
+    },
+    {
+      "amount": "60000000000000000",
+      "commitment": "21574fed151a2f9f64a45be28a3af588e9f2d17135a3537f07fd6aefa29f02af"
+    },
+    {
+      "amount": "70000000000000000",
+      "commitment": "1af241e138279829ac6ae62f0f33204bb28afd065c42593bdc791485975b2695"
+    },
+    {
+      "amount": "80000000000000000",
+      "commitment": "a8c8b87b512def9b5e500eb498af86aad2464aeae76db1f65d2326ce9026ec69"
+    },
+    {
+      "amount": "90000000000000000",
+      "commitment": "3d78736395f1d7de8e16c0b5a99f4dc4eb8f22acc15b2142441dbd8d2c31b9ce"
+    },
+    {
+      "amount": "100000000000000000",
+      "commitment": "2727d4932f9839e43b6bf5fb29a3be4c090b6eb93100bb92581adb8dd2b66154"
+    },
+    {
+      "amount": "200000000000000000",
+      "commitment": "ae96782ef2c4df7d2e04ccf9ef76237f170c9703b492c078526eb1f6853db133"
+    },
+    {
+      "amount": "300000000000000000",
+      "commitment": "1743feab12ade5fe125322272fd1406b74e8197032684622ee79abcd9493664c"
+    },
+    {
+      "amount": "400000000000000000",
+      "commitment": "079bf2a96e166ef9e6b2231db9858b99987f493387deebd51748549a0df7dc44"
+    },
+    {
+      "amount": "500000000000000000",
+      "commitment": "caba9798516dad0338d06e106d76a201937ace4c91539e617d89287306a392b1"
+    },
+    {
+      "amount": "600000000000000000",
+      "commitment": "6b087f48b3d7aac957c452e51a18d7260bf8c856c4c71e48f649ae004af68f13"
+    },
+    {
+      "amount": "700000000000000000",
+      "commitment": "9eed8b231f794c465cbe8840d0f16f7b9f9c6eb49c207de9d8551183d0c76e43"
+    },
+    {
+      "amount": "800000000000000000",
+      "commitment": "584a7893137ebd028ba75982c339b766aadaadf91450f9407d2a97d7f6b1935e"
+    },
+    {
+      "amount": "900000000000000000",
+      "commitment": "07ce54b11826a1752313551a0020fd798a009e20cdb2401d5251c1558eead26c"
+    },
+    {
+      "amount": "1000000000000000000",
+      "commitment": "39807f3dceb0a6fe34a7a1edc69b78ffbed5a78c6c875dda9669dbb29570f0f4"
+    },
+    {
+      "amount": "2000000000000000000",
+      "commitment": "da740086f15ce821e90d50afcf809c7e1851901ba35f9f6378d6407cb9c7a275"
+    },
+    {
+      "amount": "3000000000000000000",
+      "commitment": "07a17563aef5cfd036fa64d4b197a951c0d2872b0db6f9be47e67ca6b535e26e"
+    },
+    {
+      "amount": "4000000000000000000",
+      "commitment": "e349f7ebe51139fed5694037d114b7bd45dd0a6af04b62eca4d8cd552a14e3fb"
+    },
+    {
+      "amount": "5000000000000000000",
+      "commitment": "8d597ea9f5799a4d153d82d6f7bea02e5240a2c89b041e062f37bc7b82a0ac55"
+    },
+    {
+      "amount": "6000000000000000000",
+      "commitment": "a343a7e1144d33500f3efd381582ddc5d0183e5dcf8afa64bb676c973e3d1ab1"
+    },
+    {
+      "amount": "7000000000000000000",
+      "commitment": "89e93ee9f24d7261e544ca8f09a7404ee3a90ee2507ddacf412a580c09651c53"
+    },
+    {
+      "amount": "8000000000000000000",
+      "commitment": "c59410815469f459d15a6fe3f2a11ba63112faaac53dbc525d3cfab1fa9c3ddb"
+    },
+    {
+      "amount": "9000000000000000000",
+      "commitment": "9de7cb0b8d7bac47ffd3931bcd82cdd5350c2934b16e0b6432abf7cb4b5c376d"
+    },
+    {
+      "amount": "10000000000000000000",
+      "commitment": "658d01376d1863e77b096f98e6e513c20410f5c7fb18a6e59a5266845cd9b1e3"
+    }
+  ]
+}
