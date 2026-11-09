@@ -201,14 +201,14 @@ describe('address', () => {
     });
 
     // https://github.com/monero-project/monero/blob/v0.18.5.1/tests/unit_tests/base58.cpp#L516-L524
-    it.skip('rejects a spend key that is not a point', () => {
+    it('rejects a spend key that is not a point', () => {
       assert.throws(() => {
         address('mainnet').decode('41dRYYZdAjrdNeM6dfiBFL7kqund3HYGvMBF3ttsNd9SfzgYB6L7ep1Yg1osYJzLdaKAYSLVh6e6jKnAuzj3bw1oGypw7dZ');
       });
     });
 
     // https://github.com/monero-project/monero/blob/v0.18.5.1/tests/unit_tests/base58.cpp#L526-L534
-    it.skip('rejects a view key that is not a point', () => {
+    it('rejects a view key that is not a point', () => {
       assert.throws(() => {
         address('mainnet').decode('4AzKEX4gXdJdNeM6dfiBFL7kqund3HYGvMBF3ttsNd9SfzgYB6L7ep1Yg1osYJzLdaKAYSLVh6e6jKnAuzj3bw1o1CFNHsz');
       });

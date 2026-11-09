@@ -254,7 +254,7 @@ describe('raw', () => {
         });
       });
 
-      it.skip('rejects more signature vectors than miner inputs', () => {
+      it('rejects more signature vectors than miner inputs', () => {
         assert.throws(() => {
           raw.fullTransaction.encode(v1Tx([MINER_INPUT], [[], []]));
         });
@@ -263,7 +263,7 @@ describe('raw', () => {
         });
       });
 
-      it.skip('rejects fewer signature vectors than miner inputs', () => {
+      it('rejects fewer signature vectors than miner inputs', () => {
         assert.throws(() => {
           raw.fullTransaction.encode(v1Tx([MINER_INPUT, MINER_INPUT], [[]]));
         });
@@ -285,7 +285,7 @@ describe('raw', () => {
         });
       });
 
-      it.skip('rejects a signature count that does not match the ring of each key input', () => {
+      it('rejects a signature count that does not match the ring of each key input', () => {
         const vin = [KEY_INPUT, KEY_INPUT];
         assert.throws(() => {
           raw.fullTransaction.encode(v1Tx(vin, [sigs(2)]));

@@ -99,14 +99,14 @@ describe('decoys', () => {
     });
 
     // https://github.com/monero-project/monero/blob/v0.18.5.1/src/wallet/wallet2.cpp#L1039-L1052
-    it.skip('rejects 10 or fewer blocks of offsets', () => {
+    it('rejects 10 or fewer blocks of offsets', () => {
       assert.throws(() => {
         gammaPicker(chain(10, 1))();
       });
     });
 
     // https://github.com/monero-project/monero/blob/v0.18.5.1/src/wallet/wallet2.cpp#L1039-L1052
-    it.skip('rejects offsets without rct outputs', () => {
+    it('rejects offsets without rct outputs', () => {
       assert.throws(() => {
         gammaPicker(chain(20, 0))();
       });
