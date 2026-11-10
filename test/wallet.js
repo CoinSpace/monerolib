@@ -353,6 +353,32 @@ describe('wallet', () => {
       assert.deepStrictEqual(outputs.map((output) => [output.amount, output.paymentId]), [[amount, new Uint8Array(8)]]);
     });
 
+    // https://github.com/monero-project/monero/blob/v0.18.5.1/src/wallet/wallet2.cpp#L2860-L2885
+    it('keeps an output found through an additional key when the payment id cannot be decrypted', () => {
+      const fixture = constructFixtures[1];
+      const {
+        owner, index, amount,
+      } = fixture.outputs[1];
+      const decoded = fixture.decode();
+      decoded.prefix.extra = tx.buildTxExtra({
+        txPublicKey: new Uint8Array(32).fill(0xff),
+        additionalTxPublicKeys: fixture.txKeys.additionalTxPublicKeys,
+        encryptedPaymentId: new Uint8Array(8),
+      });
+      const { outputs } = wallet.scanTransaction(owner, decoded, lookup(owner, 2));
+      const found = outputs.map((output) => [output.index, output.amount, output.paymentId]);
+      assert.deepStrictEqual(found, [[index, amount, undefined]]);
+    });
+
+    // https://github.com/monero-oxide/monero-oxide/blob/0.1.0/monero-oxide/wallet/src/scan.rs#L127-L130
+    it('finds no outputs in a version 1 transaction', () => {
+      const fixture = constructFixtures[0];
+      const { owner } = fixture.outputs[0];
+      const decoded = fixture.decode();
+      decoded.prefix.version = 1;
+      assert.deepStrictEqual(wallet.scanTransaction(owner, decoded, lookup(owner)).outputs, []);
+    });
+
     it('spends a scanned output with a non-zero spend key, signing against the real output key', () => {
       const fixture = constructFixtures[1];
       const { owner } = fixture.outputs[0];
