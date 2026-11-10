@@ -5,101 +5,69 @@
 [![Version](https://img.shields.io/npm/v/monerolib?label=version)](https://www.npmjs.com/package/monerolib)
 [![License](https://img.shields.io/github/license/CoinSpace/monerolib?color=blue)](https://github.com/CoinSpace/monerolib/blob/master/LICENSE)
 
-Monero JavaScript library.
+Stateless, bigint-native Monero primitives. ESM.
 
 ## Install
 ```
 npm i monerolib
 ```
 
-## Common
+## Modules
 
-* `p` - private/secret key, it is scalar
-* `P` - public key, it is point
-* `pV` - private/secret view key
-* `PV` - public view key
-* `pS` - private/secret spend key
-* `PS` - public spend key
-* `HS()` - convert hash to scalar `hashToScalar`
-* `G` - is the base point
+| import | what |
+|---|---|
+| `wallet` | keys, addresses/subaddresses, output scanning, transaction creation |
+| `tx` | build/sign RingCT (Bulletproof+) transactions, fees, tx id |
+| `address` | base58 address encode/decode (`address(nettype)`) |
+| `crypto` | ed25519 ops, hashes, key images, derivations |
+| `ringct` | ecdh amounts, commitments, `RCTTypes`, `decodeRct` |
+| `decoys` | `gammaPicker` — decoy selection by the reference gamma distribution |
+| `coinselect` | `selectInputs` — input selection + fee/change estimation; a sweep target (no `amount`) reports the max sendable |
+| `helpers` | scalar encode/decode, `assertUint64` |
+| `raw` | wire serialization + tx/block typedefs; `fullTransaction` for full blobs, `prunedTransaction` for pruned (base-only) blobs; coder factories use the `Coder` suffix |
+| `epee` | monerod binary RPC format (`/getblocks.bin`) |
 
-Key derivation `generateKeyDerivation` means:
+Every function has JSDoc that links the exact monero v0.18.5.0 (and monero-oxide) source it ports.
 
-```
-derivation = P * p * 8
-```
+## Usage
 
-## Subaddress
+```js
+import { wallet, coinselect, decoys, address } from 'monerolib';
 
-```
-pSi = pS + HS(pV | i)
-pVi = pV * pSi
-```
+// keys
+const keys = wallet.keysFromSeed(seed);
+const addr = wallet.getSubaddress(keys, { major: 0, minor: 0 });
 
-```
-PSi = PS + HS(pV | i) * G
-PVi = pV * PSi
+// scan a chain output you might own
+const lookup = wallet.subaddressLookup(keys, majorCount, minorCount);
+const owned = wallet.scanOutput(keys, output, lookup);
 
-PSi = (pS + HS(pV | i)) * G
-PVi = pV * (pS + HS(pV | i)) * G
-```
+// outputs of a tx: recipients from the stored tx keys and addresses, own outputs from own keys
+const annotated = wallet.annotateTransaction(decodedTx, {
+  keys, subaddresses: lookup, txKeys, destinations: [recipient],
+});
 
-## Outputs
+// attach ring decoys to each spendable input (ring size is fixed at 16)
+const pick = decoys.gammaPicker(rctOffsets);
+for (const input of inputs) input.decoys = pickDecoys(pick, 15, input.globalIndex);
 
-* `r` - is the transaction private/secret key
-* `R` - is the transaction public key, `txPubKey`
-* `X` - is the stealth address or one time address `targetKey`
+// estimate the fee and the max sendable — a sweep target has no `amount`
+const { fee, sweepAmount } = coinselect.selectInputs({
+  candidates: inputs,
+  destinations: [address('mainnet').decode(recipient)],
+  ringSize: 16, baseFee, feeQuantization,
+});
 
-Fro address:
-```
-// Address (it is public key)
-R = r * G
-
-// Subaddress (it is some public data)
-R = r * PSi
-```
-
-Sending:
-```
-// Address
-X = Hs(r * PV | i)G + PS
-
-// Subaddress
-X = Hs(r * PVi | i)G + PSi
+// Picks inputs and adds change or a dummy output.
+const { transaction, bytes, txKeys, destinations } = wallet.createTransaction({
+  inputs,
+  outputs: [{ ...address('mainnet').decode(recipient), amount }],
+  keys, baseFee, feeQuantization,
+});
 ```
 
-Receiving:
-```
-// Address
-X = Hs(R * pV|i)G + PS
+`wallet.createTransaction` is the high-level builder; `tx.prepareTransaction` / `tx.createTransaction` are the low-level primitives (exact `inputs`/`outputs`, see the typedefs in `lib/tx.js`).
 
-// Subaddress
-X = Hs(R * pV|i)G + PSi
-```
+## Tests
 
-It is equal because:
-```
-// Address
-R * pV = r * G * pV = r * PV 
-
-// Subaddress
-R * pV = r * PSi * pV = r * PVi
-```
-
-`r * PV` and `R * pV` is a key derivation
-
-## Inputs
-
-* `Hp()` - convert hash to point `hashToPoint` or more correctly `hashToEc`
-* `x` - private/secret key of **stealth address** O_o
-* `J` - is the key image `keyImage`
-
-```
-x = Hs(r * PV|i) + pS
-x = Hs(R * pV|i) + pS
-```
-
-Key image is:
-```
-J = x * Hp(X)
-```
+`node --test`. Type-checked with `npm run typecheck`, linted with `npx eslint`.
