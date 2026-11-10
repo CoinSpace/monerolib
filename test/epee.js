@@ -191,6 +191,14 @@ describe('epee', () => {
       });
     });
 
+    // A UINT8 array of 4000000 elements with no element bytes after it.
+    // https://github.com/monero-project/monero/blob/v0.18.5.1/contrib/epee/include/storages/portable_storage_from_bin.h#L185-L207
+    it('rejects an array count larger than the data', () => {
+      assert.throws(() => {
+        epee.decode(hexToBytes(`${HEADER}04${'0161'}880224f400`));
+      }, /exceeds the data/);
+    });
+
     // https://github.com/monero-project/monero/blob/v0.18.5.1/contrib/epee/include/storages/portable_storage_from_bin.h#L39-L43
     it('rejects nesting past the recursion limit', () => {
       const hex = `${HEADER}${`04${'0161'}0c`.repeat(101)}00`;
