@@ -3,11 +3,11 @@ import fs from 'fs/promises';
 import {
   before, describe, it,
 } from 'node:test';
+
 import { bytesToHex, hexToBytes } from '@noble/hashes/utils.js';
 
 import * as crypto from '../lib/crypto.js';
 import * as helpers from '../lib/helpers.js';
-import { address } from '../lib/address.js';
 
 import { KNACCC_WALLET } from './helpers/wallets.js';
 import { mockRandomBytes } from './helpers/mock-random.js';
@@ -315,8 +315,9 @@ describe('crypto', () => {
     const B = KNACCC_WALLET.publicSpendKey;
     const A = KNACCC_WALLET.publicViewKey;
 
-    for (const { index, address: subaddress } of KNACCC_WALLET.subaddresses) {
-      const { publicSpendKey: D, publicViewKey: C } = address('mainnet').decode(subaddress);
+    for (const {
+      index, publicSpendKey: D, publicViewKey: C,
+    } of KNACCC_WALLET.subaddresses) {
       const name = `(${index.major}, ${index.minor})`;
 
       it(`subaddressSecret ${name}: m*G = D - B`, () => {

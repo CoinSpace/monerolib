@@ -9,10 +9,30 @@ export const KNACCC_WALLET = {
   publicViewKey: hexToBytes('4a1535063ad1fee2dabbf909d4fd9a873e29541b401f0944754e17c9a41820ce'),
   address: '4B33mFPMq6mKi7Eiyd5XuyKRVMGVZz1Rqb9ZTyGApXW5d1aT7UBDZ89ewmnWFkzJ5wPd2SFbn313vCT8a4E2Qf4KQH4pNey',
   subaddresses: [
-    { index: { major: 0, minor: 1 }, address: '8C5zHM5ud8nGC4hC2ULiBLSWx9infi8JUUmWEat4fcTf8J4H38iWYVdFmPCA9UmfLTZxD43RsyKnGEdZkoGij6csDeUnbEB' },
-    { index: { major: 0, minor: 256 }, address: '883z7xonbVBGXpsatJZ53vcDiXQkrkTHUHPxrdrHXiPnZY8DMaYJ7a88C5ovncy5zHWkLc2cQ2hUoaKYCjFtjwFV4vtcpiF' },
-    { index: { major: 256, minor: 1 }, address: '87X4ksVMRv2UGhHcgVjY6KJDjqP9S4zrCNkmomL1ziQVeZXF3RXbAx7i2rRt3UU5eXDzG9TWZ6Rk1Fyg6pZrAKQCNfLrSne' },
-    { index: { major: 256, minor: 256 }, address: '86gYdT7yqDJUXegizt1vbF3YKz5qSYVaMB61DFBDzrpVEpYgDbmuXJbXE77LQfAygrVGwYpw8hxxx9DRTiyHAemA8B5yBAq' },
+    {
+      index: { major: 0, minor: 1 },
+      address: '8C5zHM5ud8nGC4hC2ULiBLSWx9infi8JUUmWEat4fcTf8J4H38iWYVdFmPCA9UmfLTZxD43RsyKnGEdZkoGij6csDeUnbEB',
+      publicSpendKey: hexToBytes('fe358188b528335ad1cfdc24a22a23988d742c882b6f19a602892eaab3c1b62b'),
+      publicViewKey: hexToBytes('9bc2b464de90d058468522098d5610c5019c45fd1711a9517db1eea7794f5470'),
+    },
+    {
+      index: { major: 0, minor: 256 },
+      address: '883z7xonbVBGXpsatJZ53vcDiXQkrkTHUHPxrdrHXiPnZY8DMaYJ7a88C5ovncy5zHWkLc2cQ2hUoaKYCjFtjwFV4vtcpiF',
+      publicSpendKey: hexToBytes('93be9213c44c725cdb4a70c9ab5969d28fe478adbed7cb620657215242dbbdc2'),
+      publicViewKey: hexToBytes('86169f052e79912afe20b67018dcdab1d8d06370566a24c7347a70bfff0d6022'),
+    },
+    {
+      index: { major: 256, minor: 1 },
+      address: '87X4ksVMRv2UGhHcgVjY6KJDjqP9S4zrCNkmomL1ziQVeZXF3RXbAx7i2rRt3UU5eXDzG9TWZ6Rk1Fyg6pZrAKQCNfLrSne',
+      publicSpendKey: hexToBytes('85ad3a4275dbc3a30a4d659a13390066f30e72e793c1b1821016a0034ea1dee0'),
+      publicViewKey: hexToBytes('8f9303f7897c70f5505c6e904d74f84da55086656e5c86598adf72019c1a81bf'),
+    },
+    {
+      index: { major: 256, minor: 256 },
+      address: '86gYdT7yqDJUXegizt1vbF3YKz5qSYVaMB61DFBDzrpVEpYgDbmuXJbXE77LQfAygrVGwYpw8hxxx9DRTiyHAemA8B5yBAq',
+      publicSpendKey: hexToBytes('6f9a096e851e69a494f1a1072821c60f2fb95509fca6663c4d471b5399560e52'),
+      publicViewKey: hexToBytes('9f79d7112a39d4b4b58c4761fd3bcfa90b50b46a28b819311bfb27848ea8dd3f'),
+    },
   ],
 };
 

@@ -1,10 +1,11 @@
 import assert from 'node:assert/strict';
+import { describe, it } from 'node:test';
+
 import {
   bytesToHex,
   hexToBytes,
   randomBytes,
 } from '@noble/hashes/utils.js';
-import { describe, it } from 'node:test';
 
 import * as clsag from '../lib/clsag.js';
 import * as crypto from '../lib/crypto.js';

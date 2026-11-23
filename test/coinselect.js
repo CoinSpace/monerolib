@@ -1,14 +1,12 @@
 import assert from 'node:assert/strict';
-import { randomBytes } from '@noble/hashes/utils.js';
 import { describe, it } from 'node:test';
 
+import { randomBytes } from '@noble/hashes/utils.js';
+
 import * as coinselect from '../lib/coinselect.js';
-import * as tx from '../lib/tx.js';
-import { TX_WEIGHT_TARGET } from '../lib/config.js';
 
 describe('coinselect', () => {
   const RING_SIZE = 16;
-  const MIXIN = RING_SIZE - 1;
   const BASE_FEE = 1000n;
   const FEE_QUANTIZATION = 10000n;
   const FEE_MULTIPLIER = 1n;
@@ -34,15 +32,6 @@ describe('coinselect', () => {
   const total = (arr) => arr.reduce((s, x) => s + x.amount, 0n);
   const fixedSum = (dsts) => dsts.reduce((s, d) => s + (d.amount ?? 0n), 0n);
 
-  // the exact fee selectInputs must compute; estimateFee has its own fixed vectors in test/tx.js
-  const feeFor = (nInputs, outputList) => tx.estimateFee(
-    nInputs, MIXIN, outputList.length, tx.estimateExtraSize(outputList), BASE_FEE, FEE_MULTIPLIER, FEE_QUANTIZATION
-  );
-
-  const weightFor = (nInputs, outputList) => tx.estimateTxWeight(
-    nInputs, MIXIN, outputList.length, tx.estimateExtraSize(outputList)
-  );
-
   // Σselected === Σfixed + (change | sweep | 0) + fee  — nothing lost or double-counted
   const assertConserves = (result, destinations) => {
     const out = fixedSum(destinations) + (result.changeAmount ?? result.sweepAmount ?? 0n);
@@ -58,7 +47,7 @@ describe('coinselect', () => {
       assert.equal(res.sweepAmount, undefined);
       assert.equal(res.needsDummy, false);
       // fee is for 1 input, 2 outputs (destination + change)
-      assert.equal(res.fee, feeFor(1, [dst, { isChange: true }]));
+      assert.equal(res.fee, 1_540_000n);
       assertConserves(res, [dst]);
     });
 
@@ -78,23 +67,21 @@ describe('coinselect', () => {
 
     it('exact funds (change === 0): no change, dummy needed', () => {
       const dst = addr(1_000_000_000_000n);
-      const fee = feeFor(1, [dst, { isChange: true }]);
-      const res = select([{ amount: dst.amount + fee }], [dst]);
+      const res = select([{ amount: 1_000_001_540_000n }], [dst]);
       assert.equal(res.selected.length, 1);
       assert.equal(res.changeAmount, undefined);
       assert.equal(res.needsDummy, true);
-      assert.equal(res.fee, fee);
+      assert.equal(res.fee, 1_540_000n);
       assertConserves(res, [dst]);
     });
 
     it('single subaddress accepts funds that cover the destination, fee, and positive change', () => {
       const dst = addr(1_000_000_000_000n, 'subaddress');
-      const fee = feeFor(1, [dst, { isChange: true }]);
-      const res = select([{ amount: dst.amount + fee + 1n }], [dst]);
+      const res = select([{ amount: 1_000_001_540_001n }], [dst]);
       assert.equal(res.selected.length, 1);
       assert.equal(res.changeAmount, 1n);
       assert.equal(res.needsDummy, false);
-      assert.equal(res.fee, fee);
+      assert.equal(res.fee, 1_540_000n);
       assertConserves(res, [dst]);
     });
 
@@ -103,19 +90,18 @@ describe('coinselect', () => {
       const res = select([{ amount: 5_000_000_000_000n }], dsts);
       assert.ok(res.changeAmount > 0n);
       assert.equal(res.needsDummy, false);
-      assert.equal(res.fee, feeFor(1, [...dsts, { isChange: true }]));
+      assert.equal(res.fee, 2_130_000n);
       assertConserves(res, dsts);
     });
 
     it('covers a no-change tx but not the extra change-output fee: no change, remainder to fee', () => {
       const dsts = [addr(1_000_000_000_000n), addr(2_000_000_000_000n)]; // 2 outputs, change would be a 3rd
-      const feeNoChange = feeFor(1, dsts);
       // exactly enough for the no-change tx; a change output would cost more fee than the leftover
-      const res = select([{ amount: fixedSum(dsts) + feeNoChange }], dsts);
+      const res = select([{ amount: 3_000_001_540_000n }], dsts);
       assert.equal(res.selected.length, 1);
       assert.equal(res.changeAmount, undefined);
       assert.equal(res.needsDummy, false);
-      assert.equal(res.fee, feeNoChange);
+      assert.equal(res.fee, 1_540_000n);
       assertConserves(res, dsts);
     });
 
@@ -157,7 +143,7 @@ describe('coinselect', () => {
       assert.equal(res.selected.length, 2); // all candidates
       assert.equal(res.changeAmount, undefined);
       assert.equal(res.needsDummy, true); // one real output → needs a second
-      assert.equal(res.fee, feeFor(2, [dst, { isChange: true }]));
+      assert.equal(res.fee, 2_220_000n);
       assert.equal(res.sweepAmount, total(candidates) - res.fee);
       assertConserves(res, [dst]);
     });
@@ -168,7 +154,7 @@ describe('coinselect', () => {
       const res = select(candidates, dsts);
       assert.equal(res.selected.length, 2);
       assert.equal(res.needsDummy, false);
-      assert.equal(res.fee, feeFor(2, dsts));
+      assert.equal(res.fee, 2_220_000n);
       assert.equal(res.sweepAmount, total(candidates) - res.fee);
       assertConserves(res, dsts);
     });
@@ -181,7 +167,7 @@ describe('coinselect', () => {
       assert.equal(res.selected.length, 2);
       assert.equal(res.changeAmount, undefined);
       assert.equal(res.needsDummy, false);
-      assert.equal(res.fee, feeFor(2, [fixed, sweep]));
+      assert.equal(res.fee, 2_220_000n);
       assert.equal(res.sweepAmount, total(candidates) - fixed.amount - res.fee);
       assertConserves(res, [fixed, sweep]);
     });
@@ -207,18 +193,14 @@ describe('coinselect', () => {
 
     it('takes the largest candidates that fit in TX_WEIGHT_TARGET', () => {
       const dst = addr();
-      const outputs = [dst, { isChange: true }];
       const candidates = Array.from({ length: 300 }, (_, i) => ({
         amount: BigInt((i * 7919) % 300 + 1) * 1_000_000_000n,
       }));
       const res = select(candidates, [dst]);
-      const k = res.selected.length;
-      assert.ok(k < candidates.length);
-      assert.ok(weightFor(k, outputs) <= TX_WEIGHT_TARGET);
-      assert.ok(weightFor(k + 1, outputs) > TX_WEIGHT_TARGET);
-      const largest = candidates.map((c) => c.amount).sort((a, b) => (b > a ? 1 : -1)).slice(0, k);
+      assert.equal(res.selected.length, 145);
+      const largest = candidates.map((c) => c.amount).sort((a, b) => (b > a ? 1 : -1)).slice(0, 145);
       assert.deepStrictEqual(res.selected.map((c) => c.amount), largest);
-      assert.equal(res.fee, feeFor(k, outputs));
+      assert.equal(res.fee, 99_320_000n);
       assert.equal(res.sweepAmount, total(res.selected) - res.fee);
       assertConserves(res, [dst]);
     });
@@ -232,18 +214,17 @@ describe('coinselect', () => {
         ringSize: RING_SIZE,
         baseFee: BASE_FEE,
         feeQuantization: FEE_QUANTIZATION,
-        maxWeight: weightFor(10, [dst, { isChange: true }]),
+        maxWeight: 7647,
       });
       assert.equal(res.selected.length, 10);
     });
 
     it('sweep target can receive 0 (valid amount): sweepAmount === 0', () => {
       const dst = addr(); // sweep
-      const fee = feeFor(1, [dst, { isChange: true }]); // 1 input, sweep + dummy
-      const res = select([{ amount: fee }], [dst]);
+      const res = select([{ amount: 1_540_000n }], [dst]);
       assert.equal(res.sweepAmount, 0n);
       assert.equal(res.needsDummy, true);
-      assert.equal(res.fee, fee);
+      assert.equal(res.fee, 1_540_000n);
       assertConserves(res, [dst]);
     });
   });

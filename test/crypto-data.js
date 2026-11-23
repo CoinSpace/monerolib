@@ -1,7 +1,8 @@
-import { FpSqrtEven } from '@noble/curves/abstract/modular.js';
 import assert from 'node:assert/strict';
-import { bytesToHex } from '@noble/hashes/utils.js';
 import { describe, it } from 'node:test';
+
+import { FpSqrtEven } from '@noble/curves/abstract/modular.js';
+import { bytesToHex } from '@noble/hashes/utils.js';
 
 import * as crypto from '../lib/crypto.js';
 import * as cryptoData from '../lib/crypto-data.js';

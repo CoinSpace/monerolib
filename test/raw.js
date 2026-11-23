@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
-import { bytesToHex, hexToBytes } from '@noble/hashes/utils.js';
 import { describe, it } from 'node:test';
+
+import { bytesToHex, hexToBytes } from '@noble/hashes/utils.js';
 
 import * as raw from '../lib/raw.js';
 import blockFixtures from './fixtures/blocks.json' with { type: 'json' };

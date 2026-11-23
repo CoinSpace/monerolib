@@ -1,10 +1,11 @@
 import assert from 'node:assert/strict';
+import { describe, it } from 'node:test';
+
 import {
   bytesToHex,
   hexToBytes,
   utf8ToBytes,
 } from '@noble/hashes/utils.js';
-import { describe, it } from 'node:test';
 
 import * as epee from '../lib/epee.js';
 import blockFixtures from './fixtures/blocks.json' with { type: 'json' };

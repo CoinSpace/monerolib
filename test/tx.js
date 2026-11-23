@@ -2,6 +2,7 @@ import assert from 'node:assert';
 import {
   afterEach, beforeEach, describe, it,
 } from 'node:test';
+
 import {
   bytesToHex, hexToBytes, randomBytes,
 } from '@noble/hashes/utils.js';
@@ -23,7 +24,6 @@ import { FUNCTIONAL_TESTS_WALLET, KNACCC_WALLET } from './helpers/wallets.js';
 import { fixedKeys, withRandomSource } from './helpers/common.js';
 
 const scalar = helpers.decodeInt;
-const pointTimes = (point, s) => crypto.encodePoint(crypto.decodePoint(point).multiply(s));
 
 // A destination with the secret view scalar that finds its outputs.
 const recipientOf = (str, secretViewKey) => ({ ...address('mainnet').decode(str), secretView: scalar(secretViewKey) });
@@ -31,6 +31,16 @@ const STANDARD = recipientOf(KNACCC_WALLET.address, KNACCC_WALLET.secretViewKey)
 const SUBADDRESS = recipientOf(KNACCC_WALLET.subaddresses[0].address, KNACCC_WALLET.secretViewKey);
 const OTHER_SUBADDRESS = recipientOf(KNACCC_WALLET.subaddresses[1].address, KNACCC_WALLET.secretViewKey);
 const OTHER_STANDARD = recipientOf(FUNCTIONAL_TESTS_WALLET.address, FUNCTIONAL_TESTS_WALLET.secretViewKey);
+
+const G17 = hexToBytes('04be97ec9bfe6ccd01f9343b7288b117b79f91cc45c24af2f93e0060ca2b6d6f');
+const G19 = hexToBytes('b9551d690261fe83305f433f8230182ef45cd6ddb65b7c2247435ad9935a183f');
+const G23 = hexToBytes('eec0332b78793d66ab6993a41f7b270405e546fc239af64d9ab7579c550c24a3');
+const G29 = hexToBytes('91c4675d7103d26d13235834af163c80dc450001a09cafa1c9f1c15d67544ccd');
+const SUBADDRESS_17 = hexToBytes('c46b3e48037ce5d144312778043f4b76e658b6f18c96fa967bd9b54b27138e4f');
+const SUBADDRESS_19 = hexToBytes('c880fe786245c692722e1dc1b1bc8fe37cd9b58820052a67428e6e8bd9c7f045');
+const SUBADDRESS_23 = hexToBytes('d8b58ab12e8338cf0d29903928d08983997166e68a54ec66f951e3eba79edba3');
+const SUBADDRESS_29 = hexToBytes('d3f854a7e23554077fa4b845cc4b86cb565cf8af611056581c4e04382e1a5c87');
+const OTHER_SUBADDRESS_23 = hexToBytes('ae5846dbdeb74845a888ba5e7f1420f136e2e8db585a2aef471fd8339336f73a');
 
 // The spendable input of 5010000 and the sender of a monero construct_tx fixture.
 const SOURCE = constructFixtures[1];
@@ -292,7 +302,7 @@ describe('tx', () => {
 
       it('standard recipients: R = r*G, no additional keys', () => {
         const generated = tx.generateOutputs([STANDARD, OTHER_STANDARD], fixedKeys([17n]));
-        assert.deepStrictEqual(generated.txKeys.txPublicKey, crypto.secretKeyToPublicKey(17n));
+        assert.deepStrictEqual(generated.txKeys.txPublicKey, G17);
         assert.deepStrictEqual(generated.txKeys.additionalTxPublicKeys, []);
         assert.ok(finds(generated, 0, STANDARD));
         assert.ok(finds(generated, 1, OTHER_STANDARD));
@@ -300,10 +310,10 @@ describe('tx', () => {
 
       it('standard and subaddress: R = r*G, one additional key per output', () => {
         const generated = tx.generateOutputs([STANDARD, SUBADDRESS], fixedKeys([17n, 19n, 23n]));
-        assert.deepStrictEqual(generated.txKeys.txPublicKey, crypto.secretKeyToPublicKey(17n));
+        assert.deepStrictEqual(generated.txKeys.txPublicKey, G17);
         assert.deepStrictEqual(generated.txKeys.additionalTxPublicKeys, [
-          crypto.secretKeyToPublicKey(19n),
-          pointTimes(SUBADDRESS.publicSpendKey, 23n),
+          G19,
+          SUBADDRESS_23,
         ]);
         assert.ok(finds(generated, 0, STANDARD));
         assert.ok(finds(generated, 1, SUBADDRESS));
@@ -311,17 +321,17 @@ describe('tx', () => {
 
       it('single subaddress: R = r*D, no additional keys', () => {
         const generated = tx.generateOutputs([SUBADDRESS], fixedKeys([17n]));
-        assert.deepStrictEqual(generated.txKeys.txPublicKey, pointTimes(SUBADDRESS.publicSpendKey, 17n));
+        assert.deepStrictEqual(generated.txKeys.txPublicKey, SUBADDRESS_17);
         assert.deepStrictEqual(generated.txKeys.additionalTxPublicKeys, []);
         assert.ok(finds(generated, 0, SUBADDRESS));
       });
 
       it('two different subaddresses: R = r*G, one additional key per output', () => {
         const generated = tx.generateOutputs([SUBADDRESS, OTHER_SUBADDRESS], fixedKeys([17n, 19n, 23n]));
-        assert.deepStrictEqual(generated.txKeys.txPublicKey, crypto.secretKeyToPublicKey(17n));
+        assert.deepStrictEqual(generated.txKeys.txPublicKey, G17);
         assert.deepStrictEqual(generated.txKeys.additionalTxPublicKeys, [
-          pointTimes(SUBADDRESS.publicSpendKey, 19n),
-          pointTimes(OTHER_SUBADDRESS.publicSpendKey, 23n),
+          SUBADDRESS_19,
+          OTHER_SUBADDRESS_23,
         ]);
         assert.ok(finds(generated, 0, SUBADDRESS));
         assert.ok(finds(generated, 1, OTHER_SUBADDRESS));
@@ -329,7 +339,7 @@ describe('tx', () => {
 
       it('the same subaddress twice counts once: R = r*D, no additional keys', () => {
         const generated = tx.generateOutputs([SUBADDRESS, SUBADDRESS], fixedKeys([17n]));
-        assert.deepStrictEqual(generated.txKeys.txPublicKey, pointTimes(SUBADDRESS.publicSpendKey, 17n));
+        assert.deepStrictEqual(generated.txKeys.txPublicKey, SUBADDRESS_17);
         assert.deepStrictEqual(generated.txKeys.additionalTxPublicKeys, []);
         assert.ok(finds(generated, 0, SUBADDRESS));
         assert.ok(finds(generated, 1, SUBADDRESS));
@@ -337,7 +347,7 @@ describe('tx', () => {
 
       it('change of a single subaddress send derives from a*R with R = r*D', () => {
         const generated = tx.generateOutputs([SUBADDRESS, changeOf(1n)], fixedKeys([17n]), SENDER.secretView);
-        assert.deepStrictEqual(generated.txKeys.txPublicKey, pointTimes(SUBADDRESS.publicSpendKey, 17n));
+        assert.deepStrictEqual(generated.txKeys.txPublicKey, SUBADDRESS_17);
         assert.deepStrictEqual(generated.txKeys.additionalTxPublicKeys, []);
         assert.ok(finds(generated, 0, SUBADDRESS));
         assert.ok(finds(generated, 1, SENDER));
@@ -346,11 +356,11 @@ describe('tx', () => {
       it('change gets an additional key next to standard and subaddress recipients', () => {
         const destinations = [STANDARD, SUBADDRESS, changeOf(1n)];
         const generated = tx.generateOutputs(destinations, fixedKeys([17n, 19n, 23n, 29n]), SENDER.secretView);
-        assert.deepStrictEqual(generated.txKeys.txPublicKey, crypto.secretKeyToPublicKey(17n));
+        assert.deepStrictEqual(generated.txKeys.txPublicKey, G17);
         assert.deepStrictEqual(generated.txKeys.additionalTxPublicKeys, [
-          crypto.secretKeyToPublicKey(19n),
-          pointTimes(SUBADDRESS.publicSpendKey, 23n),
-          crypto.secretKeyToPublicKey(29n),
+          G19,
+          SUBADDRESS_23,
+          G29,
         ]);
         [STANDARD, SUBADDRESS, SENDER].forEach((recipient, i) => assert.ok(finds(generated, i, recipient)));
       });
@@ -422,11 +432,11 @@ describe('tx', () => {
       assert.strictEqual(txKeys.txSecretKey, 17n);
       assert.deepStrictEqual(txKeys.additionalTxSecretKeys, [19n, 23n, 29n]);
       const extra = tx.parseTxExtra(transaction.prefix.extra);
-      assert.deepStrictEqual(extra.txPublicKeys, [crypto.secretKeyToPublicKey(17n)]);
+      assert.deepStrictEqual(extra.txPublicKeys, [G17]);
       assert.deepStrictEqual(extra.additionalTxPublicKeys, [
-        crypto.secretKeyToPublicKey(19n),
-        pointTimes(SUBADDRESS.publicSpendKey, 23n),
-        crypto.secretKeyToPublicKey(29n),
+        G19,
+        SUBADDRESS_23,
+        G29,
       ]);
       assert.deepStrictEqual(txKeys.additionalTxPublicKeys, extra.additionalTxPublicKeys);
       [STANDARD, SUBADDRESS, SENDER].forEach((recipient, i) => {
@@ -441,9 +451,7 @@ describe('tx', () => {
           generateTxSecretKey: fixedKeys([17n]),
           shuffleOutputs: false,
         }));
-        const R = recipient.type === 'subaddress'
-          ? pointTimes(recipient.publicSpendKey, 17n)
-          : crypto.secretKeyToPublicKey(17n);
+        const R = recipient.type === 'subaddress' ? SUBADDRESS_17 : G17;
         assert.strictEqual(txKeys.txSecretKey, 17n);
         assert.deepStrictEqual(txKeys.additionalTxSecretKeys, []);
         const extra = tx.parseTxExtra(transaction.prefix.extra);
@@ -486,12 +494,9 @@ describe('tx', () => {
       } = shuffled();
       const kinds = destinations.map(({ type, isChange }) => (isChange ? 'change' : type));
       assert.deepStrictEqual(kinds, ['address', 'change', 'subaddress']);
+      assert.deepStrictEqual(txKeys.additionalTxSecretKeys, [19n, 23n, 29n]);
+      assert.deepStrictEqual(txKeys.additionalTxPublicKeys, [G19, G23, SUBADDRESS_29]);
       destinations.forEach((destination, i) => {
-        const s = txKeys.additionalTxSecretKeys[i];
-        const expected = destination.type === 'subaddress'
-          ? pointTimes(destination.publicSpendKey, s)
-          : crypto.secretKeyToPublicKey(s);
-        assert.deepStrictEqual(txKeys.additionalTxPublicKeys[i], expected);
         assert.deepStrictEqual(receivedBy(transaction, i, destination), { viewTag: true, amount: destination.amount });
       });
     });
@@ -532,7 +537,7 @@ describe('tx', () => {
       }, { ...OTHER_STANDARD, amount: 3000000n }];
       const { transaction } = tx.prepareTransaction(paramsOf(outputs, { generateTxSecretKey: fixedKeys([17n]) }));
       const { encryptedPaymentId, txPublicKeys } = tx.parseTxExtra(transaction.prefix.extra);
-      assert.deepStrictEqual(txPublicKeys, [crypto.secretKeyToPublicKey(17n)]);
+      assert.deepStrictEqual(txPublicKeys, [G17]);
       assert.deepStrictEqual(tx.encryptPaymentId(encryptedPaymentId, txPublicKeys[0], STANDARD.secretView), paymentID);
     });
 

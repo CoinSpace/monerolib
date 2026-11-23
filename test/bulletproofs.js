@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
+
 import { hexToBytes, randomBytes } from '@noble/hashes/utils.js';
 
 import * as bulletproofs from '../lib/bulletproofs.js';

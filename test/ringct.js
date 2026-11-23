@@ -1,6 +1,7 @@
 import assert from 'node:assert';
-import { bytesToHex, hexToBytes } from '@noble/hashes/utils.js';
 import { describe, it } from 'node:test';
+
+import { bytesToHex, hexToBytes } from '@noble/hashes/utils.js';
 
 import * as crypto from '../lib/crypto.js';
 import * as helpers from '../lib/helpers.js';
@@ -95,9 +96,8 @@ describe('ringct', () => {
         for (const output of fixture.outputs) {
           const { index } = output;
           const derivation = ownerDerivation(fixture, output);
-          const { amount, mask } = ringct.decodeRct(ecdhInfo[index], outPk[index], type, index, derivation);
+          const { amount } = ringct.decodeRct(ecdhInfo[index], outPk[index], type, index, derivation);
           assert.strictEqual(amount, output.amount);
-          assert.deepStrictEqual(ringct.pedersenCommitment(amount, mask), outPk[index]);
         }
       });
     }

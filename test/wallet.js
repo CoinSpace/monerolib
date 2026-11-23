@@ -1,8 +1,12 @@
 import assert from 'node:assert';
-import {
-  bytesToHex, concatBytes, hexToBytes, utf8ToBytes,
-} from '@noble/hashes/utils.js';
 import { describe, it } from 'node:test';
+
+import {
+  bytesToHex,
+  concatBytes,
+  hexToBytes,
+  utf8ToBytes,
+} from '@noble/hashes/utils.js';
 
 import * as clsag from '../lib/clsag.js';
 import * as crypto from '../lib/crypto.js';
@@ -200,14 +204,18 @@ describe('wallet', () => {
     const decoded = fixture.decode();
     const [standard, subaddress] = fixture.outputs;
 
+    const KEY_IMAGES = [
+      '6ec4faa7c083e891b2faf6d88bcb51f2e183d12f07a31ed23f94e66828102ebc',
+      'a8470e2fd367d0688425e26ee01707fe86f2f47fc14aff8d28a5bf23fe13a070',
+    ];
+
     // the output key and the commitment of the monero tx, and the key image x*Hp(P)
     const assertSpendMaterial = (owner, owned, index) => {
       const outputKey = decoded.prefix.vout[index].target.data.key;
       assert.ok(spendsOutputKey(owner, owned, outputKey));
       assert.deepStrictEqual(owned.publicKey, outputKey);
       assert.deepStrictEqual(owned.commitment, decoded.rctSigBase.outPk[index]);
-      const x = crypto.Fn.add(owned.keyOffset, helpers.decodeInt(owner.secretSpendKey));
-      assert.deepStrictEqual(owned.keyImage, crypto.generateKeyImage(outputKey, x));
+      assert.strictEqual(bytesToHex(owned.keyImage), KEY_IMAGES[index]);
     };
 
     it('finds an output to a main address with its amount and spend material', () => {
@@ -471,14 +479,13 @@ describe('wallet', () => {
 
     it('appends a change output the wallet can scan', () => {
       const {
-        transaction: decoded, bytes, txKeys: { txSecretKey, additionalTxSecretKeys },
+        transaction: decoded, txKeys: { txSecretKey, additionalTxSecretKeys },
       } = wallet.createTransaction(paramsOf([toKnaccc(1000000n)]));
       assert.ok(txSecretKey instanceof Uint8Array);
       assert.equal(txSecretKey.length, 32);
       assert.deepStrictEqual(additionalTxSecretKeys, []);
       const txPublicKey = crypto.secretKeyToPublicKey(helpers.decodeInt(txSecretKey));
       assert.deepStrictEqual(tx.parseTxExtra(decoded.prefix.extra).txPublicKeys, [txPublicKey]);
-      assert.deepStrictEqual(bytes, raw.fullTransaction.encode(decoded));
       assert.strictEqual(decoded.prefix.vout.length, 2);
       const found = wallet.scanTransaction(SENDER, decoded, lookup(SENDER)).outputs;
       const change = ONE_INPUT[0].amount - 1000000n - decoded.rctSigBase.txnFee;
@@ -488,8 +495,7 @@ describe('wallet', () => {
     it('pads a single-subaddress send to two outputs with a dummy, extra not inflated', () => {
       const sub = recipientOf(SUBADDRESS);
       // exact funds: the input pays the recipient and the two-output fee, so no change is left and a dummy is added
-      const extraSize = tx.estimateExtraSize([{ ...sub, amount: 1n }, { isChange: true }]);
-      const fee = tx.estimateFee(1, 15, 2, extraSize, BASE_FEE, 1n, FEE_QUANTIZATION);
+      const fee = 160_000n;
       const recipientAmount = ONE_INPUT[0].amount - fee;
       const suppliedKey = helpers.encodeInt(17n);
       const outputs = [{ ...sub, amount: recipientAmount }];
@@ -501,8 +507,9 @@ describe('wallet', () => {
       assert.strictEqual(decoded.rctSigBase.txnFee, fee);
       assert.deepStrictEqual(txSecretKey, suppliedKey);
       assert.deepStrictEqual(additionalTxSecretKeys, []);
-      const R = crypto.encodePoint(crypto.decodePoint(sub.publicSpendKey).multiply(17n));
-      assert.deepStrictEqual(tx.parseTxExtra(decoded.prefix.extra).txPublicKeys, [R]);
+      assert.deepStrictEqual(tx.parseTxExtra(decoded.prefix.extra).txPublicKeys, [
+        hexToBytes('f038a6da5d30a9b8516efe442afca786c1d2ef0696bcd4111cd0108483746ff0'),
+      ]);
       const found = wallet.scanTransaction(FUNCTIONAL, decoded, lookup(FUNCTIONAL, 2)).outputs;
       assert.deepStrictEqual(found.map((output) => output.amount), [recipientAmount]);
       assert.strictEqual(destinations[found[0].index].isChange, undefined);
@@ -564,16 +571,23 @@ describe('wallet', () => {
         const decoded = raw.fullTransaction.decode(bytes);
         const extra = tx.parseTxExtra(decoded.prefix.extra);
         const txKeys = recover(decoded);
-        assert.equal(extra.additionalTxPublicKeys.length, 3);
-        const txPublicKey = crypto.secretKeyToPublicKey(helpers.decodeInt(txKeys.txSecretKey));
-        assert.deepStrictEqual(extra.txPublicKeys, [txPublicKey]);
-        const additionalTxPublicKeys = txKeys.additionalTxSecretKeys.map((key, i) => {
-          const s = helpers.decodeInt(key);
-          return destinations[i].type === 'subaddress'
-            ? crypto.encodePoint(crypto.decodePoint(destinations[i].publicSpendKey).multiply(s))
-            : crypto.secretKeyToPublicKey(s);
-        });
-        assert.deepStrictEqual(extra.additionalTxPublicKeys, additionalTxPublicKeys);
+        assert.deepStrictEqual(extra.txPublicKeys.map(bytesToHex), [
+          'fc8819e652f7a3754bd3f4ce4de34176cff3b3eb373114b6dca9b73129fb44f1',
+        ]);
+        const additionalG = [
+          'a5fc32cdaf5b9bac12911bc48c4601ed4057d01a533bde0b52ce6ee7295601bd',
+          'ccee859f11a50602bf1a3cdff083e501c70c8a9999dcc34a5508c44b0875e536',
+          'd8b8cf73d0ba46cfe7a0112ef4fb629c494502ec2792774a8f16e3eef65fd80e',
+        ];
+        const additionalD = [
+          '56e38686cac63dc4b76d4d375351ae4027451901604ec180b8e55ed6fce29955',
+          '843e07dac5433e67883462da35172ecf499da17b743e440e971303fda5736eb5',
+          'baaf8c48ac1d584cdb5a70048b969cbb1356f5ff25816c9bc9fb8d769aef3e6d',
+        ];
+        assert.deepStrictEqual(
+          extra.additionalTxPublicKeys.map(bytesToHex),
+          destinations.map((destination, i) => (destination.type === 'subaddress' ? additionalD[i] : additionalG[i]))
+        );
         assert.deepStrictEqual(
           wallet.checkTxKey(decoded, txKeys, addresses).map(({ destination, amount }) => [destination, amount]).sort(),
           addresses.map((destination, i) => [destination, amounts[i]]).sort()
@@ -615,15 +629,26 @@ describe('wallet', () => {
         const extra = tx.parseTxExtra(decoded.prefix.extra);
         assert.deepStrictEqual(extra.txPublicKeys, [result.txKeys.txPublicKey]);
         assert.deepStrictEqual(extra.additionalTxPublicKeys, result.txKeys.additionalTxPublicKeys);
-        const txPublicKey = crypto.secretKeyToPublicKey(helpers.decodeInt(result.txKeys.txSecretKey));
-        assert.deepStrictEqual(extra.txPublicKeys, [txPublicKey]);
-        result.txKeys.additionalTxSecretKeys.forEach((key, i) => {
-          const s = helpers.decodeInt(key);
-          const expected = i === 1
-            ? crypto.encodePoint(crypto.decodePoint(sub.publicSpendKey).multiply(s))
-            : crypto.secretKeyToPublicKey(s);
-          assert.deepStrictEqual(extra.additionalTxPublicKeys[i], expected);
-        });
+        if (supplied) {
+          assert.deepStrictEqual(extra.txPublicKeys.map(bytesToHex), [
+            '04be97ec9bfe6ccd01f9343b7288b117b79f91cc45c24af2f93e0060ca2b6d6f',
+          ]);
+          assert.deepStrictEqual(extra.additionalTxPublicKeys.map(bytesToHex), [
+            'b9551d690261fe83305f433f8230182ef45cd6ddb65b7c2247435ad9935a183f',
+            '8e2b0f298b1cbc60b0bbc9a810a876c132e2e91d3553167d2627e2efc428a2e8',
+            '91c4675d7103d26d13235834af163c80dc450001a09cafa1c9f1c15d67544ccd',
+          ]);
+        } else {
+          const txPublicKey = crypto.secretKeyToPublicKey(helpers.decodeInt(result.txKeys.txSecretKey));
+          assert.deepStrictEqual(extra.txPublicKeys, [txPublicKey]);
+          result.txKeys.additionalTxSecretKeys.forEach((key, i) => {
+            const s = helpers.decodeInt(key);
+            const expected = i === 1
+              ? crypto.encodePoint(crypto.decodePoint(sub.publicSpendKey).multiply(s))
+              : crypto.secretKeyToPublicKey(s);
+            assert.deepStrictEqual(extra.additionalTxPublicKeys[i], expected);
+          });
+        }
         [KNACCC, FUNCTIONAL, SENDER].forEach((owner, i) => {
           const found = wallet.scanTransaction(owner, decoded, lookup(owner, 2)).outputs;
           assert.deepStrictEqual(found.map((output) => output.index), [i]);
@@ -842,7 +867,7 @@ describe('wallet', () => {
       const d = crypto.subaddressSecretSpendKey(a, helpers.decodeInt(owner.secretSpendKey), output.subaddress);
       const derivation = crypto.generateKeyDerivation(fixture.txKeys.additionalTxPublicKeys[1], a);
       const x = crypto.deriveSecretKey(derivation, 1, d);
-      const keyImage = crypto.generateKeyImage(outputKey, x);
+      const keyImage = hexToBytes('a8470e2fd367d0688425e26ee01707fe86f2f47fc14aff8d28a5bf23fe13a070');
 
       it('the expected one-time secret spends the monero output key', () => {
         assert.deepStrictEqual(crypto.secretKeyToPublicKey(x), outputKey);

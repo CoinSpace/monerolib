@@ -1,6 +1,7 @@
 import assert from 'node:assert';
-import { hexToBytes } from '@noble/hashes/utils.js';
 import { describe, it } from 'node:test';
+
+import { hexToBytes } from '@noble/hashes/utils.js';
 
 import { gammaPicker } from '../lib/decoys.js';
 

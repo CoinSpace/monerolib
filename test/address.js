@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
-import { hexToBytes } from '@noble/hashes/utils.js';
 import { describe, it } from 'node:test';
+
+import { hexToBytes } from '@noble/hashes/utils.js';
 
 import { address } from '../lib/address.js';
 
@@ -143,11 +144,10 @@ describe('address', () => {
     });
 
     it('decodes the payment id of a testnet integrated address', () => {
-      const standard = address('testnet').decode(TESTNET_ADDRESS);
       assert.deepEqual(address('testnet').decode(TESTNET_INTEGRATED_ADDRESS), {
         type: 'integratedaddress',
-        publicSpendKey: standard.publicSpendKey,
-        publicViewKey: standard.publicViewKey,
+        publicSpendKey: hexToBytes('21fb9c311c0d49fbd1b9e49fca9aca08743731bb48e17816875483c75a164cf0'),
+        publicViewKey: hexToBytes('6f32b639678cbe0fe6f5750836ac5802fd296f7fb44e17c62ed00da930ca44c8'),
         paymentID: TESTNET_PAYMENT_ID,
       });
     });
