@@ -125,6 +125,19 @@ describe('coinselect', () => {
       }, /not enough funds/);
     });
 
+    it('not enough funds: error.fee is for the candidates that fit in TX_WEIGHT_TARGET, at least 1 input', () => {
+      const dst = addr(1_000_000_000_000n);
+      assert.throws(() => {
+        select([{ amount: 1_000n }, { amount: 2_000n }], [dst]);
+      }, { message: /not enough funds/, fee: 2_220_000n });
+      assert.throws(() => {
+        select([], [dst]);
+      }, { message: /not enough funds/, fee: 1_540_000n });
+      assert.throws(() => {
+        select(Array.from({ length: 300 }, () => ({ amount: 1_000n })), [dst]);
+      }, { message: /not enough funds/, fee: 99_320_000n });
+    });
+
     it('too many small inputs: transaction too large; total too small: not enough funds', () => {
       const candidates = Array.from({ length: 300 }, () => ({ amount: 1_000_000_000n }));
       assert.throws(() => {
@@ -177,6 +190,19 @@ describe('coinselect', () => {
       assert.throws(() => {
         select([{ amount: 1_000n }], [addr(1_000_000_000_000n), addr()]);
       }, /not enough funds/);
+    });
+
+    it('not enough funds: error.fee is for the candidates that fit in TX_WEIGHT_TARGET, at least 1 input', () => {
+      const dsts = [addr(1_000_000_000_000n), addr()];
+      assert.throws(() => {
+        select([{ amount: 1_000n }, { amount: 2_000n }], dsts);
+      }, { message: /not enough funds/, fee: 2_220_000n });
+      assert.throws(() => {
+        select([], dsts);
+      }, { message: /not enough funds/, fee: 1_540_000n });
+      assert.throws(() => {
+        select(Array.from({ length: 300 }, () => ({ amount: 1_000n })), dsts);
+      }, { message: /not enough funds/, fee: 99_320_000n });
     });
 
     it('takes the largest candidates that fit in TX_WEIGHT_TARGET', () => {
