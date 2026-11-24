@@ -247,6 +247,12 @@ describe('wallet', () => {
       assert.strictEqual(wallet.scanOutput(standard.owner, { ...output, outPk }, lookup(standard.owner)), null);
     });
 
+    it('skips an output whose output key is not a valid point', () => {
+      const output = outputOf(fixture, decoded, 0);
+      const outputKey = new Uint8Array(32).fill(0xff);
+      assert.strictEqual(wallet.scanOutput(standard.owner, { ...output, outputKey }, lookup(standard.owner)), null);
+    });
+
     it('skips an output whose view tag does not match', () => {
       const output = outputOf(fixture, decoded, 0);
       const viewTag = output.viewTag ^ 0xff;
