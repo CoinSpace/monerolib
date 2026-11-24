@@ -562,6 +562,13 @@ describe('tx', () => {
         }, /duplicate ring member/);
       });
 
+      it('a ring size other than 16', () => {
+        const [input] = INPUTS;
+        assert.throws(() => {
+          tx.createTransaction(paramsOf(TWO_OUTPUTS(), { inputs: [{ ...input, decoys: input.decoys.slice(1) }] }));
+        }, /wrong ring size/);
+      });
+
       it('no inputs', () => {
         assert.throws(() => {
           tx.createTransaction(paramsOf(TWO_OUTPUTS(), { inputs: [] }));
