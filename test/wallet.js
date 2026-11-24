@@ -677,6 +677,12 @@ describe('wallet', () => {
         wallet.createTransaction(paramsOf([toKnaccc(ONE_INPUT[0].amount)]));
       }, /not enough funds/);
     });
+
+    it('rejects a sweep destination', () => {
+      assert.throws(() => {
+        wallet.createTransaction(paramsOf([recipientOf(KNACCC_WALLET.address)]));
+      }, /sweep destinations are not supported/);
+    });
   });
 
   describe('checkTxKey', () => {
