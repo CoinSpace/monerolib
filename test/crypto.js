@@ -1,10 +1,12 @@
 import assert from 'node:assert';
 import fs from 'fs/promises';
 import {
-  before, describe, it,
+  after, before, describe, it,
 } from 'node:test';
 
-import { bytesToHex, hexToBytes } from '@noble/hashes/utils.js';
+import {
+  bytesToHex, hexToBytes, randomBytes,
+} from '@noble/hashes/utils.js';
 
 import * as crypto from '../lib/crypto.js';
 import * as helpers from '../lib/helpers.js';
@@ -18,10 +20,11 @@ const tests = (await fs.readFile('./test/fixtures/tests.txt', { encoding: 'utf8'
 // https://github.com/monero-project/monero/blob/v0.18.5.1/tests/hash/tests-fast.txt
 const hashTests = (await fs.readFile('./test/fixtures/hash_tests_fast.txt', { encoding: 'utf8' })).trim().split('\n');
 
-// The vectors below replay one shared stream, so it is started once for the whole file.
-before(mockRandomBytes);
-
 describe('crypto', () => {
+  // The vectors below replay one shared stream, so it is started once for the whole suite.
+  before(mockRandomBytes);
+  after(() => crypto.__mockRandomBytes__(randomBytes));
+
   for (const item of tests) {
     const [cmd, ...rest] = item.split(' ');
     switch (cmd) {
