@@ -77,6 +77,14 @@ describe('wallet', () => {
       assert.deepStrictEqual(keys.secretViewKey, hexToBytes('9fe83aa6104612b587eb2e6ee1f0c929f85ce047804a789f4d579f9d2e20de0b'));
       assert.deepStrictEqual(keys.publicViewKey, hexToBytes('beb87b123ca0be6228ef692cecc4ba5170cc55f3987f08006dc638743776ebb3'));
     });
+
+    it('rejects a seed that is not 32 bytes', () => {
+      for (const seed of [new Uint8Array(16), new Uint8Array(33)]) {
+        assert.throws(() => {
+          wallet.keysFromSeed(seed);
+        }, /"seed" expected Uint8Array of length 32/);
+      }
+    });
   });
 
   describe('keysFromSecretKeys', () => {
