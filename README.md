@@ -48,8 +48,9 @@ const annotated = wallet.annotateTransaction(decodedTx, {
 });
 
 // attach ring decoys to each spendable input (ring size is fixed at 16)
+// pickDecoys is your code: 15 { publicKey, commitment, globalIndex } from the node (get_outs)
 const pick = decoys.gammaPicker(rctOffsets);
-for (const input of inputs) input.decoys = pickDecoys(pick, 15, input.globalIndex);
+for (const input of inputs) input.decoys = await pickDecoys(pick, 15, input.globalIndex);
 
 // estimate the fee and the max sendable — a sweep target has no `amount`
 const { fee, sweepAmount } = coinselect.selectInputs({
