@@ -201,6 +201,25 @@ describe('clsag', () => {
     assert.equal(bytesToHex(sig.I), bytesToHex(crypto.generateKeyImage(real.pub, real.sec)));
   });
 
+  it('rejects a key image not in main subgroup', () => {
+    // forged so that the ring closes: only the subgroup check rejects it
+    const ring = [
+      ['67acea83442b086003bdeea7c53a53d420a2b786adfdecc6d850862859467a73', '7315dd0672e332afb02698ba78cc1e10c4a8bb991a492d6bb2a1ad541e508f8e'],
+      ['0be540280e04e9c5c7c7c6008c02c2c6d728f0d18794743a024d12af9ca0052a', 'dbe26e30b550f9c79fe4ed4f719e89d3571fdd730762284e3e69558cfe631222'],
+    ].map(([publicKey, commitment]) => ({ publicKey: hexToBytes(publicKey), commitment: hexToBytes(commitment) }));
+    const signature = {
+      s: [
+        '026fc2e505958f59bcc9d6278b7a642610b24aa595a9f6dcf677ca4f06d5ae0c',
+        'b1ec1f5f5609efd39f5bfc0a210b8015e3bb01fb91f8585a568ac98446b1c808',
+      ].map(hexToBytes),
+      c1: hexToBytes('d12d3b1753da4d8c0b6b99684c058eff9244039927b73e96feec103cf4711d0f'),
+      I: hexToBytes('f938c3d2acad0436d41c9fbf02b7c25ea0301363c9d8d37bc8b8ec906022d6d6'),
+      D: hexToBytes('c1193deb2e06f3cb4506b3a8535cd69eb16174100ff6aea181091b3e4ea529f4'),
+    };
+    const pseudoOut = hexToBytes('58f002c9f0089a3165d65e2200a945750bf777e77b33e670908e44ba8929c6c2');
+    assert.ok(!clsag.verifyClsag(new Uint8Array(32).fill(7), ring, pseudoOut, signature));
+  });
+
   // mirrors monero TEST(ringct, CLSAG)
   // https://github.com/monero-project/monero/blob/v0.18.5.1/tests/unit_tests/ringct.cpp#L141-L300
   describe('rejects invalid signatures', () => {
