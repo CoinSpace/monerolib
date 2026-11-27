@@ -198,6 +198,10 @@ describe('tx', () => {
       assert.deepStrictEqual(parse(`02ff01${'00'.repeat(255)}${PUB_KEY_FIELD}`), parsed([PUB_KEY]));
     });
 
+    it('stops at a nonce of 256 bytes, above the monero maximum', () => {
+      assert.deepStrictEqual(parse(`${PUB_KEY_FIELD}028002${'00'.repeat(256)}${PUB_KEY_FIELD}`), parsed([PUB_KEY]));
+    });
+
     it('does not read a payment id from a nonce of the wrong size', () => {
       assert.deepStrictEqual(parse('02052a0109080706'), parsed());
     });
