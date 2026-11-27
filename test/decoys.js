@@ -112,5 +112,21 @@ describe('decoys', () => {
         gammaPicker(chain(20, 0))();
       });
     });
+
+    // https://github.com/monero-project/monero/commit/0b7967907f82867d2884c559396543212600509e
+    it('rejects a last-year output count of 0 or less', () => {
+      assert.throws(() => {
+        gammaPicker(Array(262801).fill(1))();
+      }, /no outputs in consideration window/);
+      assert.throws(() => {
+        gammaPicker([2, ...Array(262800).fill(1)])();
+      }, /no outputs in consideration window/);
+    });
+
+    it('throws instead of hanging on a block of more than 2^32 outputs', () => {
+      // CHAIN with 2^32 + 1 outputs in block 1990, the newest unlocked block; age 0 picks it
+      const offsets = CHAIN.map((count, i) => (i >= 1990 ? count + 2 ** 32 - 4 : count));
+      assert.throws(() => pickWith(offsets, ...RECENT_SPEND, INT[0]), RangeError);
+    });
   });
 });
